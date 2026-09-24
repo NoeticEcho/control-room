@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""validate-handoff: check handoff files against the control-room contract.
+
+    validate-handoff [--schema PATH] [--config PATH] FILE...
+
+Checks each FILE against schemas/handoff.schema.json, and then what the schema
+cannot state:
+  - the file is named for its `epic` (`handoff/<epic>.json`);
+  - `branch` starts with the worker branch prefix (control-room.json,
+    `branch_prefix`, default `claude/`);
+  - a `ready` handoff has a `lane` whose verdict is `passed`, and no child
+    is `open`;
+  - a `deferred` child has a `note`, and a `reparented` child a `to`;
+  - every sha (`base`, `lane.head`, `children[].commits`) is 40 hex characters.
+
+Prints one line per problem, `FILE: PATH: message`, and exits 1 if there was
+any; exits 0 when every file is valid, 2 on a usage error or a missing
+dependency.
+
+Why Python with jsonschema, not sh with jq: the schema is the contract, so
+it is checked by a real JSON Schema implementation. A jq rewrite of the
+keywords the schema happens to use today would be a second, partial
+implementation that drifts from the schema without anyone noticing.
+Python 3 and one package (`pip install jsonschema`) is the cost.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+
+SHA = re.compile(r"^[0-9a-f]{40}$")
+HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_SCHEMA = os.path.join(HERE, "..", "schemas", "handoff.schema.json")
+DEFAULT_PREFIX = "claude/"
+
+
+def usage(message):
+    print("validate-handoff: " + message, file=sys.stderr)
+    print("usage: validate-handoff [--schema PATH] [--config PATH] FILE...", file=sys.stderr)
+    sys.exit(2)
+
+
+def json_path(parts):
+    path = "$"
+    for part in parts:
+        path += "[%d]" % part if isinstance(part, int) else "." + str(part)
+    return path
+
+
+def find_config(path):
+    """control-room.json at the root of the repository that holds `path`."""
+    directory = os.path.dirname(os.path.abspath(path))
+    try:
+        root = subprocess.run(
+            ["git", "-C", directory, "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    candidate = os.path.join(root, "control-room.json")
+    return candidate if os.path.isfile(candidate) else None
+
+
+def load_prefix(config_path):
+    if config_path is None:
+        return DEFAULT_PREFIX, None
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = json.load(f)
+        prefix = config.get("branch_prefix", DEFAULT_PREFIX)
+        if not isinstance(prefix, str) or not prefix:
+            raise ValueError("branch_prefix is not a non-empty string")
+    except (OSError, ValueError, AttributeError) as e:
+        return None, "%s is not valid: %s" % (config_path, e)
+    return prefix, None
+
+
+def contract_errors(path, handoff, prefix):
+    """What the schema cannot state. Yields (json path parts, message)."""
+    epic = handoff.get("epic")
+    name = os.path.basename(path)
+    if isinstance(epic, str) and name != epic + ".json":
+        yield ["epic"], "the file is %s but the epic is %s; name it %s.json" % (name, epic, epic)
+
+    branch = handoff.get("branch")
+    if isinstance(branch, str) and not branch.startswith(prefix):
+        yield ["branch"], "%s is not a worker branch (%s...)" % (branch, prefix)
+
+    children = handoff.get("children")
+    children = children if isinstance(children, list) else []
+    lane = handoff.get("lane")
+    if handoff.get("status") == "ready":
+        if not isinstance(lane, dict):
+            yield ["lane"], "a ready handoff needs the lane of its finished run"
+        elif lane.get("verdict") != "passed":
+            yield ["lane", "verdict"], "a ready handoff needs a passed lane, not %s" % lane.get("verdict")
+        for i, child in enumerate(children):
+            if isinstance(child, dict) and child.get("outcome") == "open":
+                yield ["children", i, "outcome"], "%s is open; a ready handoff decides every child" % child.get("id")
+
+    for i, child in enumerate(children):
+        if not isinstance(child, dict):
+            continue
+        outcome = child.get("outcome")
+        note = child.get("note")
+        if outcome == "deferred" and not (isinstance(note, str) and note.strip()):
+            yield ["children", i], "%s is deferred without a note saying why" % child.get("id")
+        if outcome == "reparented" and not child.get("to"):
+            yield ["children", i], "%s is reparented without a `to`" % child.get("id")
+
+    shas = [(["base"], handoff.get("base"))]
+    if isinstance(lane, dict):
+        shas.append((["lane", "head"], lane.get("head")))
+    for i, child in enumerate(children):
+        commits = child.get("commits") if isinstance(child, dict) else None
+        for j, sha in enumerate(commits if isinstance(commits, list) else []):
+            shas.append((["children", i, "commits", j], sha))
+    for where, sha in shas:
+        if sha is not None and not (isinstance(sha, str) and SHA.match(sha)):
+            yield where, "%r is not a full sha (40 lowercase hex characters)" % (sha,)
+
+
+def validate(path, validator, prefix):
+    """Returns the problem lines for one file."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            handoff = json.load(f)
+    except OSError as e:
+        return ["%s: cannot read: %s" % (path, e.strerror)]
+    except ValueError as e:
+        return ["%s: not JSON: %s" % (path, e)]
+
+    problems = []
+    for error in sorted(validator.iter_errors(handoff), key=lambda e: list(e.absolute_path)):
+        problems.append("%s: %s: %s" % (path, json_path(error.absolute_path), error.message))
+    if isinstance(handoff, dict):
+        for where, message in contract_errors(path, handoff, prefix):
+            problems.append("%s: %s: %s" % (path, json_path(where), message))
+    return problems
+
+
+def main(argv):
+    schema_path = DEFAULT_SCHEMA
+    config_path = None
+    files = []
+    args = iter(argv)
+    for arg in args:
+        if arg in ("--schema", "--config"):
+            value = next(args, None)
+            if value is None:
+                usage(arg + " needs a path")
+            if arg == "--schema":
+                schema_path = value
+            else:
+                config_path = value
+        elif arg in ("-h", "--help"):
+            print(__doc__.strip())
+            return 0
+        elif arg.startswith("-") and arg != "-":
+            usage("unknown option " + arg)
+        else:
+            files.append(arg)
+    if not files:
+        usage("no handoff file given")
+
+    try:
+        import jsonschema
+    except ImportError:
+        print("validate-handoff: needs the jsonschema package: pip install jsonschema", file=sys.stderr)
+        return 2
+    try:
+        with open(schema_path, encoding="utf-8") as f:
+            schema = json.load(f)
+    except (OSError, ValueError) as e:
+        usage("cannot load the schema %s: %s" % (schema_path, e))
+    validator_class = jsonschema.validators.validator_for(schema)
+    validator_class.check_schema(schema)
+    validator = validator_class(schema)
+
+    problems = []
+    for path in files:
+        prefix, config_error = load_prefix(config_path or find_config(path))
+        if config_error:
+            problems.append("%s: %s" % (path, config_error))
+            continue
+        problems += validate(path, validator, prefix)
+    for line in problems:
+        print(line)
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

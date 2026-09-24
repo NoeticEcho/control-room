@@ -1,0 +1,541 @@
+#!/bin/sh
+# guard: the control-room worker guard (docs/protocol.md § The guard).
+#
+# As a pre-command hook: reads one hook event as JSON on stdin, in Claude
+# Code's PreToolUse shape (tool_name, tool_input, cwd). Allows by exiting 0
+# with no output. Denies by exiting 2 with one line on stderr, "guard: denied:
+# <reason>. Instead: <what to do>", and the same reason as a PreToolUse
+# permissionDecision on stdout.
+#
+# As a git pre-push hook (the fallback for runners with no pre-command hook):
+#   guard --git-pre-push <remote> <url>   with git's ref lines on stdin.
+#
+# Configuration: control-room.json at the repository root,
+#   {"integration_branch": "main", "branch_prefix": "claude/"}
+# Both keys are optional; those are the defaults.
+#
+# A guard against confusion, not a permission system: it reads commands the
+# way a careful person would, not the way a shell would. See README.md.
+#
+# Dependencies: POSIX sh, git, jq.
+
+set -u
+
+US=$(printf '\037')
+
+deny() {
+	if [ "${mode:-hook}" = hook ] && command -v jq >/dev/null 2>&1; then
+		jq -cn --arg r "guard: denied: $1. Instead: $2" \
+			'{hookSpecificOutput: {hookEventName: "PreToolUse",
+			  permissionDecision: "deny", permissionDecisionReason: $r}}'
+	fi
+	printf 'guard: denied: %s. Instead: %s\n' "$1" "$2" >&2
+	exit 2
+}
+
+# ---- configuration ---------------------------------------------------------
+
+load_config() {
+	integration=main
+	prefix=claude/
+	config_error=
+	root=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null) || return 0
+	[ -f "$root/control-room.json" ] || return 0
+	if ! values=$(jq -r '
+		if type != "object" then error("not an object") else . end
+		| [(.integration_branch // "main"), (.branch_prefix // "claude/")]
+		| if all(type == "string" and length > 0) then .[] else error("not strings") end
+		' "$root/control-room.json" 2>/dev/null); then
+		config_error="$root/control-room.json is not valid"
+		return 0
+	fi
+	integration=$(printf '%s\n' "$values" | sed -n 1p)
+	prefix=$(printf '%s\n' "$values" | sed -n 2p)
+}
+
+need_config() {
+	[ -z "$config_error" ] ||
+		deny "$config_error, so the push rules cannot be checked" \
+			'fix control-room.json: {"integration_branch": "main", "branch_prefix": "claude/"}'
+}
+
+# ---- branches --------------------------------------------------------------
+
+# The simulated state of a chained command: the directory `cd` moved to, and
+# the branch a `git switch`/`git checkout` earlier in the command moved to.
+override_dir=
+override_branch=
+
+join_dir() {
+	case $2 in
+	/*) printf '%s\n' "$2" ;;
+	*) printf '%s/%s\n' "$1" "$2" ;;
+	esac
+}
+
+current_branch() {
+	if [ -n "$override_dir" ] && [ "$1" = "$override_dir" ]; then
+		printf '%s\n' "$override_branch"
+	else
+		git -C "$1" symbolic-ref --quiet --short HEAD 2>/dev/null
+	fi
+}
+
+# check_destination <branch> <dir>: the only branch a worker may write is the
+# one it is on, and that one must be a worker branch.
+check_destination() {
+	need_config
+	cur=$(current_branch "$2")
+	if [ -z "$cur" ]; then
+		deny "a push to $1 while not on a branch (detached HEAD, or a switch the guard cannot follow)" \
+			"switch to your epic's branch ($prefix<epic>-<slug>) and push it by name"
+	fi
+	case $cur in
+	"$integration") own="switch to your epic's branch ($prefix<epic>-<slug>) and push it by name" ;;
+	"$prefix"*) own="push the branch you are on by name: git push origin $cur" ;;
+	*) own="work on your epic's branch, $prefix<epic>-<slug>, and push it by name" ;;
+	esac
+	if [ "$1" = "$integration" ]; then
+		deny "a push to the integration branch $integration" "$own; the coordinator lands it"
+	fi
+	if [ "$1" != "$cur" ]; then
+		deny "a push to $1, which is not the current branch $cur" "$own"
+	fi
+	case $1 in
+	"$prefix"*) ;;
+	*) deny "a push to $1, which is not a worker branch ($prefix...)" "$own" ;;
+	esac
+}
+
+deny_force() {
+	deny "a force push" \
+		"merge the remote branch into yours (git pull --no-rebase origin <branch>), then push by name without force"
+}
+
+deny_tags() {
+	deny "writing a tag" \
+		"leave tags and releases to the coordinator; note the need in your handoff"
+}
+
+deny_delete() {
+	deny "deleting a branch" \
+		"leave the branch in place; the coordinator removes branches after landing"
+}
+
+deny_merge() {
+	deny "merging a pull request" \
+		"end with EPIC <id> READY <sha> <pr-url>; the coordinator lands it"
+}
+
+# ---- git -------------------------------------------------------------------
+
+check_refspec() { # <refspec> <dir>
+	ref=$1
+	case $ref in +*) deny_force ;; esac
+	case $ref in
+	*:*) src=${ref%%:*} dst=${ref#*:} ;;
+	*) src=$ref dst= ;;
+	esac
+	case $ref in :*) deny_delete ;; esac
+	case $src in
+	HEAD | @) src=$(current_branch "$2") ;;
+	refs/heads/*) src=${src#refs/heads/} ;;
+	esac
+	[ -n "$dst" ] || dst=$src
+	case $dst in
+	refs/heads/*) dst=${dst#refs/heads/} ;;
+	refs/tags/*) deny_tags ;;
+	refs/*) deny "a push to $dst" "push only your own branch by name" ;;
+	esac
+	check_destination "$dst" "$2"
+}
+
+check_push() { # <dir> <args...>
+	dir=$1
+	shift
+	have_repo=
+	refspecs=
+	while [ $# -gt 0 ]; do
+		a=$1
+		shift
+		case $a in
+		--force | --force-with-lease | --force-with-lease=* | --force-if-includes) deny_force ;;
+		--tags | --follow-tags) deny_tags ;;
+		--delete | --prune) deny_delete ;;
+		--mirror | --all | --branches)
+			deny "a push of every branch ($a)" "push only your own branch by name" ;;
+		--repo | --push-option | --receive-pack | --exec) [ $# -gt 0 ] && shift ;;
+		--) ;;
+		--*) ;;
+		-?*)
+			flags=${a#-}
+			while [ -n "$flags" ]; do
+				rest=${flags#?}
+				case ${flags%"$rest"} in
+				f) deny_force ;;
+				d) deny_delete ;;
+				o) [ -z "$rest" ] && [ $# -gt 0 ] && shift
+					rest= ;;
+				esac
+				flags=$rest
+			done
+			;;
+		*)
+			if [ -z "$have_repo" ]; then
+				have_repo=1
+			else
+				refspecs=$refspecs$a$US
+			fi
+			;;
+		esac
+	done
+	if [ -z "$refspecs" ]; then
+		need_config
+		cur=$(current_branch "$dir")
+		deny "a push with no explicit refspec (a branch made from $integration tracks it)" \
+			"name the branch: git push origin ${cur:-<your-branch>}"
+	fi
+	old_ifs=$IFS
+	IFS=$US
+	# shellcheck disable=SC2086 # split on the unit separator, globbing is off
+	set -- $refspecs
+	IFS=$old_ifs
+	for r in "$@"; do
+		check_refspec "$r" "$dir"
+	done
+}
+
+check_tag() {
+	list=
+	write=
+	named=
+	while [ $# -gt 0 ]; do
+		a=$1
+		shift
+		case $a in
+		-l | --list) list=1 ;;
+		--delete | --annotate | --sign | --force | --edit | --local-user=* | --message=* | --file=*) write=1 ;;
+		--local-user | --message | --file) write=1 && [ $# -gt 0 ] && shift ;;
+		--contains | --no-contains | --merged | --no-merged | --points-at | --sort | --format)
+			[ $# -gt 0 ] && shift ;;
+		--) ;;
+		--*) ;;
+		-n*) ;;
+		-?*)
+			case $a in *[adsfumFe]*) write=1 ;; esac
+			case $a in *[muF]) [ $# -gt 0 ] && shift ;; esac
+			;;
+		*) named=1 ;;
+		esac
+	done
+	if [ -n "$write" ] || { [ -n "$named" ] && [ -z "$list" ]; }; then
+		deny_tags
+	fi
+}
+
+check_branch() {
+	for a in "$@"; do
+		case $a in
+		--delete) deny_delete ;;
+		--*) ;;
+		-*[dD]*) deny_delete ;;
+		esac
+	done
+}
+
+# note_switch <dir> <switch|checkout> <args...>: follow `git switch -c <b>`
+# and friends, so a push later in the same command is checked against <b>.
+note_switch() {
+	dir=$1
+	sub=$2
+	shift 2
+	target=
+	create=
+	positional=0
+	paths=
+	while [ $# -gt 0 ]; do
+		a=$1
+		shift
+		case $a in
+		-c | -C | -b | -B | --create | --force-create | --orphan)
+			create=${1-}
+			[ $# -gt 0 ] && shift
+			;;
+		--create=* | --force-create=* | --orphan=*) create=${a#*=} ;;
+		--detach | -d)
+			[ "$sub" = switch ] || [ "$a" = --detach ] || continue
+			create=
+			target=
+			positional=-1
+			;;
+		--) paths=1 ;;
+		-*) ;;
+		*)
+			[ -n "$paths" ] && continue
+			positional=$((positional + 1))
+			[ -z "$target" ] && target=$a
+			;;
+		esac
+	done
+	if [ -n "$create" ]; then
+		override_branch=$create
+	elif [ "$positional" -eq -1 ]; then
+		override_branch=
+	elif [ "$sub" = checkout ] && { [ -n "$paths" ] || [ "$positional" -ne 1 ]; }; then
+		return 0 # restores paths; the branch does not change
+	elif [ "$target" = - ]; then
+		override_branch= # the previous branch: unknown here, so no push passes
+	elif [ -n "$target" ]; then
+		override_branch=$target
+	else
+		return 0
+	fi
+	override_dir=$dir
+}
+
+check_git() {
+	dir=$sim_dir
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-C)
+			[ $# -gt 1 ] || return 0
+			dir=$(join_dir "$dir" "$2")
+			shift 2
+			;;
+		-C?*)
+			dir=$(join_dir "$dir" "${1#-C}")
+			shift
+			;;
+		-c | --git-dir | --work-tree | --namespace | --config-env)
+			[ $# -gt 1 ] || return 0
+			shift 2
+			;;
+		-*) shift ;;
+		*) break ;;
+		esac
+	done
+	[ $# -gt 0 ] || return 0
+	sub=$1
+	shift
+	case $sub in
+	push) check_push "$dir" "$@" ;;
+	tag) check_tag "$@" ;;
+	branch) check_branch "$@" ;;
+	switch | checkout) note_switch "$dir" "$sub" "$@" ;;
+	esac
+}
+
+# ---- gh --------------------------------------------------------------------
+
+check_gh() {
+	[ $# -gt 1 ] || return 0
+	group=$1
+	verb=$2
+	shift 2
+	case $group/$verb in
+	pr/merge) deny_merge ;;
+	release/create) deny_tags ;;
+	pr/create)
+		while [ $# -gt 0 ]; do
+			case $1 in
+			-B | --base) base=${2-} && shift ;;
+			--base=*) base=${1#--base=} ;;
+			*) base= ;;
+			esac
+			shift
+			if [ -n "$base" ]; then
+				check_pr_base "$base"
+			fi
+		done
+		;;
+	api/*)
+		for a in "$verb" "$@"; do
+			case $a in
+			*pulls/*/merge*) deny_merge ;;
+			esac
+		done
+		;;
+	esac
+}
+
+check_pr_base() {
+	need_config
+	[ "$1" = "$integration" ] ||
+		deny "a pull request against $1" "open the pull request against $integration"
+}
+
+# ---- shell commands --------------------------------------------------------
+
+# Splits a shell command into simple commands, one per line, words separated
+# by the unit separator. Follows quotes, escapes, comments, the operators
+# ; & | && || ( ) and backquotes, `sh -c '...'` and `eval`. It does not expand
+# variables, aliases or functions.
+split_program=$(cat <<'JQ'
+def flush: if .cur != null then .words += [.cur] | .cur = null else . end;
+def cut: flush | if (.words | length) > 0 then .segs += [.words] | .words = [] else . end;
+def split_shell:
+  reduce (explode[] | [.] | implode) as $c (
+    {segs: [], words: [], cur: null, q: null, esc: false};
+    if .q == "#" then (if $c == "\n" then .q = null | cut else . end)
+    elif .esc then .esc = false | (if $c == "\n" then . else .cur += $c end)
+    elif .q == "'" then (if $c == "'" then .q = null else .cur += $c end)
+    elif .q == "\"" then
+      (if $c == "\"" then .q = null elif $c == "\\" then .esc = true else .cur += $c end)
+    elif $c == "\\" then .esc = true | .cur += ""
+    elif $c == "'" or $c == "\"" then .q = $c | .cur += ""
+    elif $c == " " or $c == "\t" then flush
+    elif ($c | test("^[;&|()`\n]$")) then cut
+    elif $c == "#" and .cur == null then .q = "#"
+    else .cur += $c end
+  ) | cut | .segs;
+def inner($w):
+  [ range(0; ($w | length) - 1) as $i
+    | select(($w[$i] | test("^-[a-zA-Z]*c$"))
+             and ([$w[:$i][] | test("(^|/)(ba|da|k|z|a)?sh$")] | any))
+    | $w[$i + 1] ]
+  + (if $w[0] == "eval" then [$w[1:] | join(" ")] else [] end);
+def expand: [ .[] as $w | $w, (inner($w)[] | split_shell | expand[]) ];
+.tool_input.command | split_shell | expand[] | map(gsub("[\n\u001f]"; " ")) | join("\u001f")
+JQ
+)
+
+check_command() { # <segment words...>
+	# Skip what only wraps the command: assignments, env, sudo, keywords.
+	wrapped=
+	while [ $# -gt 0 ]; do
+		case $1 in
+		env | command | exec | nohup | time | sudo | nice | xargs | '!' | '{' | '}' | then | do | else | if | elif | while | until)
+			wrapped=1
+			shift
+			;;
+		timeout)
+			wrapped=1
+			[ $# -gt 2 ] || return 0
+			shift 2
+			;;
+		-u | -g | -C | -S)
+			# env -u NAME, sudo -u USER: an option of the wrapper with a value
+			[ -n "$wrapped" ] || break
+			[ $# -gt 2 ] || return 0
+			shift 2
+			;;
+		-*)
+			[ -n "$wrapped" ] || break
+			shift
+			;;
+		[A-Za-z_]*=*) shift ;;
+		*) break ;;
+		esac
+	done
+	[ $# -gt 0 ] || return 0
+	cmd=$1
+	shift
+	case $cmd in
+	git | */git) check_git "$@" ;;
+	gh | */gh) check_gh "$@" ;;
+	cd)
+		case ${1-} in
+		'' | '~') sim_dir=${HOME:-/} ;;
+		-) sim_dir=/nonexistent ;;
+		*) sim_dir=$(join_dir "$sim_dir" "$1") ;;
+		esac
+		;;
+	esac
+}
+
+check_shell() {
+	if ! segments=$(printf '%s' "$event" | jq -r "$split_program" 2>/dev/null); then
+		deny "a command the guard could not read" "run it as a plain command"
+	fi
+	set -f
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		old_ifs=$IFS
+		IFS=$US
+		# shellcheck disable=SC2086 # split on the unit separator, globbing is off
+		set -- $line
+		IFS=$old_ifs
+		check_command "$@"
+	done <<EOF
+$segments
+EOF
+}
+
+# ---- MCP tools -------------------------------------------------------------
+
+check_mcp() {
+	case $tool in
+	*__merge_pull_request | *__enable_pr_auto_merge) deny_merge ;;
+	*__delete_branch) deny_delete ;;
+	*__create_pull_request)
+		check_pr_base "$(printf '%s' "$event" | jq -r '.tool_input.base // ""')"
+		;;
+	*__update_pull_request)
+		base=$(printf '%s' "$event" | jq -r '.tool_input.base // ""')
+		[ -z "$base" ] || check_pr_base "$base"
+		;;
+	*__push_files | *__create_or_update_file | *__delete_file)
+		check_destination "$(printf '%s' "$event" | jq -r '.tool_input.branch // ""')" "$sim_dir"
+		;;
+	esac
+}
+
+# ---- git pre-push ----------------------------------------------------------
+
+pre_push() {
+	sim_dir=$(pwd)
+	load_config "$sim_dir"
+	while read -r _local_ref local_sha remote_ref remote_sha; do
+		[ -n "${remote_ref:-}" ] || continue
+		case $local_sha in *[!0]*) ;; *) deny_delete ;; esac
+		case $remote_ref in
+		refs/tags/*) deny_tags ;;
+		refs/heads/*) ;;
+		*) deny "a push to $remote_ref" "push only your own branch by name" ;;
+		esac
+		check_destination "${remote_ref#refs/heads/}" "$sim_dir"
+		case $remote_sha in
+		*[!0]*)
+			if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+				deny_force
+			fi
+			;;
+		esac
+	done
+}
+
+# ---- main ------------------------------------------------------------------
+
+if [ "${1-}" = --git-pre-push ]; then
+	mode=pre-push
+	pre_push
+	exit 0
+fi
+mode=hook
+
+event=$(cat)
+
+if ! command -v jq >/dev/null 2>&1; then
+	case $event in
+	*git* | *gh\ * | *_pull_request* | *_branch* | *_file*)
+		deny "a command the guard cannot check: jq is not installed" \
+			"install jq, the guard's one dependency" ;;
+	esac
+	exit 0
+fi
+
+if ! tool=$(printf '%s' "$event" | jq -er '.tool_name // ""' 2>/dev/null); then
+	deny "an event that is not a JSON object" "check the hook's wiring"
+fi
+
+sim_dir=$(printf '%s' "$event" | jq -r '.cwd // ""')
+[ -n "$sim_dir" ] || sim_dir=${CLAUDE_PROJECT_DIR:-$(pwd)}
+load_config "$sim_dir"
+
+case $tool in
+mcp__*) check_mcp ;;
+esac
+if [ "$(printf '%s' "$event" | jq -r '.tool_input.command | type')" = string ]; then
+	check_shell
+fi
+exit 0
