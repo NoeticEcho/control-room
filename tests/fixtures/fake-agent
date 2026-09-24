@@ -1,0 +1,12 @@
+#!/bin/sh
+# A stand-in for an agent CLI. Appends one JSON line per call to
+# $FAKE_AGENT_LOG: the arguments, the working directory and the profile
+# variable ($FAKE_AGENT_VAR, default CR_PROFILE). Prints a reply, and exits
+# with $FAKE_AGENT_EXIT (default 0).
+var=${FAKE_AGENT_VAR:-CR_PROFILE}
+profile=$(printenv "$var" || true)
+jq -cn --arg cwd "$(pwd)" --arg profile "$profile" \
+	'{args: $ARGS.positional, cwd: $cwd, profile: $profile}' --args -- "$@" \
+	>>"${FAKE_AGENT_LOG:?}"
+echo "fake agent: $# arguments"
+exit "${FAKE_AGENT_EXIT:-0}"
