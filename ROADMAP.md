@@ -24,17 +24,25 @@
 
 ## CR-2: runners
 
-- **`runners/claude-code-cloud/`**: a setup-script template, the opening
-  message, the brief command. Proven in use.
+- **`runners/claude-code-cloud/`**: the setup-script template, the opening
+  message (`cr-cloud opening`), the brief command (`cr-cloud brief`, which
+  runs `claude -p --cloud`), and why a cross-session message is not a brief.
+  Proven in use; the flags checked against the documentation.
 - **`runners/local/`**: `cr-worker new <profile> <epic> <slug>` makes the
-  worktree and branch and starts the session with the profile set.
-  `cr-worker brief <profile> brief.md` delivers the brief as a user message.
-  Documented shared-machine hazards.
-- **`runners/e2b/`**: create a sandbox, clone, install the agent CLI, start
-  the agent headless with the opening message and the brief. Keep the API key
-  out of the repository.
-- **`runners/codex/`**: map the protocol onto Codex cloud tasks, verified
-  against Codex's documentation. Say plainly what could not be verified.
+  worktree and branch and records the profile; `cr-worker start <profile>`
+  opens the headless session; `cr-worker brief <profile> brief.md` delivers
+  the brief as a user message in that session. Claude Code's
+  `--session-id`/`--resume` verified by a real run. Documented shared-machine
+  hazards. Tested with a fake agent.
+- **`runners/e2b/`**: `cr-e2b start` creates a sandbox, clones, installs the
+  agent CLI, sets the profile and starts the agent headless with the opening
+  message and the brief. Keys only from the environment. Tested against a
+  fake SDK, with a contract test against the real one; the live path is
+  unverified until a first run with a key.
+- **`runners/codex/`**: the protocol mapped onto Codex cloud chats from
+  Codex's documentation, with links and what could not be verified; the
+  guard's rules for `AGENTS.md`, since Codex cloud has no documented
+  pre-command hook.
 
 ## CR-3: the desk
 
