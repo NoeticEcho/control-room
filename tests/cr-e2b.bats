@@ -159,7 +159,9 @@ command_n() {
 }
 
 @test "start: without the SDK it says how to get it" {
-	PYTHONPATH="$BATS_TEST_TMPDIR/empty" start
+	# A stub that fails to import, so that an SDK installed in site-packages
+	# (as in CI) is hidden too.
+	PYTHONPATH="$BATS_TEST_DIRNAME/fixtures/no-e2b" start
 	[ "$status" -eq 2 ]
 	[[ "$output" == *"pip install e2b"* ]]
 }
