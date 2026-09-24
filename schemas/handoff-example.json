@@ -1,0 +1,30 @@
+{
+  "epic": "proj-12",
+  "profile": "backend",
+  "session": "<cloud session id>",
+  "branch": "claude/proj-12-slug",
+  "status": "ready",
+  "base": "<full sha of the integration branch last merged>",
+  "children": [
+    {"id": "proj-12.1", "outcome": "done", "commits": ["<full sha>"]}
+  ],
+  "runs": ["<run id>"],
+  "lane": {
+    "verdict": "passed",
+    "seconds": 612,
+    "head": "<full sha the checks ran at>",
+    "gates": [
+      {"id": "ci.local", "outcome": "passed"},
+      {"id": "validate", "outcome": "passed"}
+    ]
+  },
+  "discovered": [
+    {"text": "Something found outside this epic, with where and why it matters."}
+  ],
+  "questions": [
+    {"text": "A question for the owner.", "blocking": false}
+  ],
+  "shared_change_requests": [
+    {"text": "The exact change needed outside scope, and why.", "paths": ["ci.yml"]}
+  ]
+}
