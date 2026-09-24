@@ -57,7 +57,10 @@ brief (coordinator → worker, as a user message)
 | `prompts/en/`, `prompts/ru/` | The master prompt, the owner interview, the coordinator session, the worker's opening message, the brief template |
 | `schemas/handoff.schema.json` | The handoff's JSON Schema, and an example |
 | `desk/` | A static desk page that reads a JSON queue (CR-3, see ROADMAP) |
-| `scripts/` | A guard hook for workers and a handoff validator (CR-1, see ROADMAP) |
+| `scripts/guard` | The worker guard: a pre-command hook (or git pre-push hook) that refuses pushes to other branches, force pushes, tags, branch deletions and merges |
+| `scripts/validate-handoff` | Checks a handoff against the schema and the rules a schema cannot state |
+| `scripts/README.md` | How to wire the guard into `.claude/settings.json`, and what it does not catch |
+| `Makefile`, `tests/` | `make check`: shellcheck and the bats suites, also run in CI |
 
 ## Status
 

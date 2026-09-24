@@ -54,7 +54,8 @@ denies() {
 }
 
 check_denied() {
-	if [ "$status" -ne 2 ] || [[ "$output" != *"guard: denied: "*"$2"*"Instead: "* ]]; then
+	if [ "$status" -ne 2 ] || [[ "$output" != *"guard: denied: "*"$2"* ]] ||
+		[[ "$output" != *"guard: denied: "*". Instead: "* ]]; then
 		echo "expected a denial containing '$2' for: $1"
 		echo "status $status: $output"
 		return 1
@@ -81,7 +82,11 @@ check_denied() {
 
 @test "push: the integration branch is denied even when it is the current branch" {
 	git -C "$repo" switch -q main
-	denies 'git push origin main' 'integration branch main'
+	denies 'git push origin main' "Instead: switch to your epic's branch (claude/<epic>-<slug>)"
+}
+
+@test "push: the denial names the branch to push instead" {
+	denies 'git push origin HEAD:main' 'Instead: push the branch you are on by name: git push origin claude/cr-1-x'
 }
 
 @test "push: a current branch outside the worker prefix is denied" {

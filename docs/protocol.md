@@ -73,6 +73,16 @@ A hook runs before each of a worker's commands and refuses:
 - force pushes, tags, branch deletions;
 - merging a pull request.
 
+It also refuses a pull request against any base but the integration branch,
+and a write through a GitHub MCP tool to any branch but the worker's own.
+
+[`scripts/guard`](../scripts/guard) is this hook: a pre-command hook for
+Claude Code, and a git `pre-push` hook where a runner has no pre-command hook.
+It reads the integration branch and the workers' branch prefix from
+`control-room.json` at the repository root (defaults `main` and `claude/`).
+Each denial names the rule and says what to do instead. Wiring and limits:
+[`scripts/README.md`](../scripts/README.md).
+
 It is a guard against confusion, not a permission system: the session has the
 owner's repository credentials. A worker the guard stops records the question
 in its handoff and ends `BLOCKED`; it does not route around it.

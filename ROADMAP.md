@@ -5,16 +5,22 @@
 - **`scripts/guard`**: the worker guard as a PreToolUse-style hook. It reads
   a JSON event on stdin and denies with a reason and an "instead". The rules
   are in `docs/protocol.md` § The guard.
-  - POSIX sh or a single-file script with no dependencies.
-  - A test per rule, and a test that everything else passes through.
-  - Adapters for Claude Code hooks, and a documented fallback where a runner
-    has no pre-command hook.
+  - POSIX sh plus jq, shellcheck clean.
+  - A test per rule, including chained and wrapped commands, and tests that
+    everything else passes through.
+  - Wired for Claude Code hooks (`scripts/README.md`); where a runner has no
+    pre-command hook, the same script runs as a git `pre-push` hook.
+  - Configured by `control-room.json`: the integration branch and the branch
+    prefix.
 - **`scripts/validate-handoff`**: the schema, plus what the schema cannot
   state:
-  - the file name matches `epic`;
+  - the file name matches `epic`, and the branch carries the prefix;
   - a ready handoff has a passing lane and no open child;
-  - `deferred` has a `note`, and `reparented` has a `to`.
-- **CI**: shellcheck and the tests.
+  - `deferred` has a `note`, and `reparented` has a `to`;
+  - every sha is 40 hex characters.
+  - Python 3 with jsonschema, so a real implementation checks the schema.
+- **CI**: `make check` (shellcheck and both bats suites) on pull requests and
+  on `main`, actions pinned by commit.
 
 ## CR-2: runners
 

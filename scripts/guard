@@ -90,18 +90,20 @@ check_destination() {
 		deny "a push to $1 while not on a branch (detached HEAD, or a switch the guard cannot follow)" \
 			"switch to your epic's branch ($prefix<epic>-<slug>) and push it by name"
 	fi
+	case $cur in
+	"$integration") own="switch to your epic's branch ($prefix<epic>-<slug>) and push it by name" ;;
+	"$prefix"*) own="push the branch you are on by name: git push origin $cur" ;;
+	*) own="work on your epic's branch, $prefix<epic>-<slug>, and push it by name" ;;
+	esac
 	if [ "$1" = "$integration" ]; then
-		deny "a push to the integration branch $integration" \
-			"push your own branch by name (git push origin $cur); the coordinator lands it"
+		deny "a push to the integration branch $integration" "$own; the coordinator lands it"
 	fi
 	if [ "$1" != "$cur" ]; then
-		deny "a push to $1, which is not the current branch $cur" \
-			"push the branch you are on by name: git push origin $cur"
+		deny "a push to $1, which is not the current branch $cur" "$own"
 	fi
 	case $1 in
 	"$prefix"*) ;;
-	*) deny "a push to $1, which is not a worker branch ($prefix...)" \
-		"work on your epic's branch, $prefix<epic>-<slug>, and push it by name" ;;
+	*) deny "a push to $1, which is not a worker branch ($prefix...)" "$own" ;;
 	esac
 }
 
@@ -136,7 +138,6 @@ check_refspec() { # <refspec> <dir>
 	esac
 	case $ref in :*) deny_delete ;; esac
 	case $src in
-	refs/tags/*) deny_tags ;;
 	HEAD | @) src=$(current_branch "$2") ;;
 	refs/heads/*) src=${src#refs/heads/} ;;
 	esac
