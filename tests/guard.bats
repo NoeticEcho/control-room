@@ -1,6 +1,9 @@
 #!/usr/bin/env bats
 # Tests for scripts/guard. Each test builds a throwaway repository on a
 # worker branch and feeds the guard a PreToolUse-shaped event.
+# The commands under test are data, so they sit in single quotes (SC2016);
+# bats sets $stderr and $stderr_lines (SC2154).
+# shellcheck disable=SC2016,SC2154
 
 bats_require_minimum_version 1.5.0
 
@@ -31,6 +34,7 @@ mcp_event() {
 
 feed() {
 	printf '%s' "$1" >"$BATS_TEST_TMPDIR/event"
+	# shellcheck disable=SC2086 # GUARD_SH may carry options: "bash --posix"
 	run ${GUARD_SH:-sh} "$GUARD" <"$BATS_TEST_TMPDIR/event"
 }
 
@@ -359,6 +363,7 @@ check_denied() {
 
 @test "output: a denial is one line on stderr and a PreToolUse deny on stdout" {
 	event 'git push origin main' >"$BATS_TEST_TMPDIR/event"
+	# shellcheck disable=SC2086 # as in feed
 	run --separate-stderr ${GUARD_SH:-sh} "$GUARD" <"$BATS_TEST_TMPDIR/event"
 	[ "$status" -eq 2 ]
 	[ "${#stderr_lines[@]}" -eq 1 ]

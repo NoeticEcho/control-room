@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/NoeticEcho/control-room/schemas/handoff.schema.json",
   "title": "control-room handoff",
-  "description": "A worker's claim about its epic: `handoff/<epic>.json` on the epic's branch, one file per epic, changed as the epic moves. It is a claim, not an authority: the coordinator reads it at the READY sha and checks it against the tracker and the recorded check run, and trusts the run record over this copy of it. The validator checks this schema and what a schema cannot state: the file is named for its `epic`; a `ready` handoff carries a `lane` whose verdict is `passed` and no child still `open`; a `deferred` child has a `note` and a `reparented` one a `to`.",
+  "description": "A worker's claim about its epic: `handoff/<epic>.json` on the epic's branch, one file per epic, changed as the epic moves. It is a claim, not an authority: the coordinator reads it at the READY sha and checks it against the tracker and the recorded check run, and trusts the run record over this copy of it. The validator checks this schema and what a schema cannot state: the file is named for its `epic`; a `ready` handoff carries a `lane` whose verdict is `passed` and no child still `open`; a `deferred` child has a `note` and a `reparented` one a `to`; the branch carries the configured prefix; every sha is 40 hex characters.",
   "type": "object",
   "required": [
     "epic",
@@ -33,8 +33,8 @@
     },
     "branch": {
       "type": "string",
-      "pattern": "^claude/[^\\s]+$",
-      "description": "`<prefix>/<epic>-<slug>`, created from the integration branch by the epic's first commit."
+      "pattern": "^[^\\s]+$",
+      "description": "`<prefix><epic>-<slug>`, created from the integration branch by the epic's first commit. The prefix is the project's `branch_prefix` (control-room.json, default `claude/`), which the validator checks because it is configuration, not schema."
     },
     "status": {
       "type": "string",

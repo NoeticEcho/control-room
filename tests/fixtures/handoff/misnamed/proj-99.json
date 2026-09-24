@@ -1,0 +1,41 @@
+{
+  "epic": "proj-12",
+  "profile": "backend",
+  "session": "session_example",
+  "branch": "claude/proj-12-slug",
+  "status": "ready",
+  "base": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+  "children": [
+    {
+      "id": "proj-12.1",
+      "outcome": "done",
+      "commits": [
+        "9fceb02d0ae598e95dc970b74767f19372d61af8"
+      ]
+    },
+    {
+      "id": "proj-12.2",
+      "outcome": "deferred",
+      "note": "needs the owner's decision on retention"
+    },
+    {
+      "id": "proj-12.3",
+      "outcome": "reparented",
+      "to": "proj-14"
+    }
+  ],
+  "runs": [
+    "run-proj-12-1"
+  ],
+  "lane": {
+    "verdict": "passed",
+    "seconds": 612,
+    "head": "9fceb02d0ae598e95dc970b74767f19372d61af8",
+    "gates": [
+      {
+        "id": "check",
+        "outcome": "passed"
+      }
+    ]
+  }
+}
