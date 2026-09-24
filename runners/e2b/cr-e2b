@@ -1,0 +1,239 @@
+#!/usr/bin/env python3
+"""cr-e2b: run a control-room worker in an e2b sandbox (docs/runners.md § e2b).
+
+    cr-e2b start --repo URL --profile P --brief FILE [options]
+    cr-e2b brief --sandbox ID --brief FILE     a follow-up, as a user message
+    cr-e2b log   --sandbox ID                  the agent's output so far
+    cr-e2b kill  --sandbox ID
+
+`start` creates a sandbox from a template, clones the repository on the
+integration branch, installs the agent CLI, sets the profile variable, and
+starts the agent headless: the opening message opens a session
+(`claude -p <opening> --session-id <uuid>`) and the brief follows in the same
+session (`claude -p <brief> --resume <uuid>`). The agent runs detached in the
+sandbox, so this script returns at once; the sandbox lives until --timeout.
+
+Keys come from the environment and are never written to a file:
+  E2B_API_KEY        read by the e2b SDK (required)
+  ANTHROPIC_API_KEY  the agent's model key, passed into the sandbox (required)
+  GITHUB_TOKEN       optional: clone a private repository and push the branch;
+                     git reads it through a credential helper, at each use
+
+Needs Python 3 and the e2b SDK (`pip install e2b`). Why Python: the SDK is
+published for Python and JavaScript, and the Python one is a single file to
+run with no build step.
+
+Checked against the e2b Python SDK 2.51.0 source (Sandbox.create, connect,
+commands.run, files.write/read, kill). The live path has not been run here:
+unverified until someone runs it with a key.
+"""
+
+import argparse
+import os
+import re
+import shlex
+import subprocess
+import sys
+import uuid
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+STATE = "/home/user/.cr"  # the sandbox's own files: opening, briefs, log, session id
+INSTALL = "curl -fsSL https://claude.ai/install.sh | bash"
+AGENT_ARGS = "--permission-mode acceptEdits"
+
+
+def fail(message, status=1):
+    print("cr-e2b: " + message, file=sys.stderr)
+    sys.exit(status)
+
+
+def sdk():
+    try:
+        import e2b
+    except ImportError:
+        fail("needs the e2b SDK: pip install e2b", 2)
+    return e2b
+
+
+def need_env(name):
+    value = os.environ.get(name)
+    if not value:
+        fail("%s is not set; it comes from the environment, never from a file" % name, 2)
+    return value
+
+
+def local_git(key):
+    try:
+        return subprocess.run(["git", "config", key], capture_output=True, text=True).stdout.strip()
+    except OSError:
+        return ""
+
+
+def run(sandbox, cmd, what, cwd=None, timeout=600):
+    """A foreground command; a non-zero exit stops the runner."""
+    e2b = sdk()
+    try:
+        result = sandbox.commands.run(cmd, cwd=cwd, timeout=timeout)
+    except e2b.CommandExitException as e:
+        fail("%s failed (exit %s): %s" % (what, e.exit_code, (e.stderr or "").strip()[-2000:]))
+    return result
+
+
+def agent_command(prompt_file, session_flag, session, agent_args):
+    """The shell line for one agent turn: the prompt file is a user message."""
+    return 'claude -p "$(cat %s)" %s %s %s' % (
+        shlex.quote(prompt_file), session_flag, shlex.quote(session), agent_args)
+
+
+def detach(sandbox, turns, workdir):
+    """Starts the turns one after another in the background and returns."""
+    script = "cd %s && export PATH=\"$HOME/.local/bin:$PATH\" && %s" % (
+        shlex.quote(workdir), " && ".join(turns))
+    run(sandbox,
+        "nohup sh -c %s >>%s/log 2>&1 </dev/null &" % (shlex.quote(script), STATE),
+        "starting the agent")
+
+
+def fill(template, values):
+    for key, value in values.items():
+        template = template.replace("<%s>" % key, value)
+    return template
+
+
+def read(path, what):
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError as e:
+        fail("cannot read the %s %s: %s" % (what, path, e.strerror), 2)
+    if not text.strip():
+        fail("the %s %s is empty" % (what, path), 2)
+    return text
+
+
+def cmd_start(args):
+    e2b = sdk()
+    need_env("E2B_API_KEY")
+    model_key = need_env("ANTHROPIC_API_KEY")
+    brief = read(args.brief, "brief")
+    opening = fill(read(args.opening, "opening message"), {
+        "profile": args.profile,
+        "profile-variable": args.profile_variable,
+        "integration-branch": args.integration,
+        "prefix": args.prefix,
+    })
+
+    envs = {args.profile_variable: args.profile, "ANTHROPIC_API_KEY": model_key}
+    if os.environ.get("GITHUB_TOKEN"):
+        envs["GITHUB_TOKEN"] = os.environ["GITHUB_TOKEN"]
+    sandbox = e2b.Sandbox.create(
+        template=args.template, timeout=args.timeout, envs=envs,
+        metadata={"control-room-profile": args.profile})
+    print("sandbox %s: profile %s" % (sandbox.sandbox_id, args.profile))
+
+    if "GITHUB_TOKEN" in envs:
+        # The helper reads the token from the environment at each use; the
+        # token itself is never written to the sandbox's disk.
+        helper = '!f() { echo username=x-access-token; echo "password=$GITHUB_TOKEN"; }; f'
+        run(sandbox, "git config --global credential.helper %s" % shlex.quote(helper), "git credentials")
+    name = args.git_name or local_git("user.name")
+    email = args.git_email or local_git("user.email")
+    if name and email:
+        run(sandbox, "git config --global user.name %s && git config --global user.email %s"
+            % (shlex.quote(name), shlex.quote(email)), "git identity")
+
+    run(sandbox, "git clone --branch %s %s %s" % (
+        shlex.quote(args.integration), shlex.quote(args.repo), shlex.quote(args.workdir)),
+        "cloning %s" % args.repo, timeout=args.clone_timeout)
+    run(sandbox, args.install, "installing the agent", timeout=args.clone_timeout)
+
+    session = str(uuid.uuid4())
+    run(sandbox, "mkdir -p %s" % STATE, "the state directory")
+    sandbox.files.write(STATE + "/opening.md", opening)
+    sandbox.files.write(STATE + "/brief-1.md", brief)
+    sandbox.files.write(STATE + "/session-id", session + "\n")
+    detach(sandbox, [
+        agent_command(STATE + "/opening.md", "--session-id", session, args.agent_args),
+        agent_command(STATE + "/brief-1.md", "--resume", session, args.agent_args),
+    ], args.workdir)
+    print("agent started: session %s" % session)
+    print("follow it:     cr-e2b log --sandbox %s" % sandbox.sandbox_id)
+    print("brief it:      cr-e2b brief --sandbox %s --brief <file>" % sandbox.sandbox_id)
+    return 0
+
+
+def connect(args):
+    e2b = sdk()
+    need_env("E2B_API_KEY")
+    return e2b.Sandbox.connect(args.sandbox)
+
+
+def cmd_brief(args):
+    brief = read(args.brief, "brief")
+    if not (brief.startswith("EPIC ") and ": branch " in brief.splitlines()[0]):
+        print("cr-e2b: %s is not a brief (EPIC <id>: branch ...); the worker will answer it as a question"
+              % args.brief, file=sys.stderr)
+    sandbox = connect(args)
+    session = sandbox.files.read(STATE + "/session-id").strip()
+    name = "%s/brief-%s.md" % (STATE, uuid.uuid4().hex[:8])
+    sandbox.files.write(name, brief)
+    detach(sandbox, [agent_command(name, "--resume", session, args.agent_args)], args.workdir)
+    print("brief delivered to session %s in sandbox %s" % (session, args.sandbox))
+    return 0
+
+
+def cmd_log(args):
+    sandbox = connect(args)
+    sys.stdout.write(sandbox.files.read(STATE + "/log"))
+    return 0
+
+
+def cmd_kill(args):
+    sandbox = connect(args)
+    sandbox.kill()
+    print("sandbox %s killed" % args.sandbox)
+    return 0
+
+
+def parser():
+    p = argparse.ArgumentParser(prog="cr-e2b", description=__doc__.split("\n\n")[0])
+    sub = p.add_subparsers(dest="command", required=True)
+
+    start = sub.add_parser("start", help="create a sandbox and start a worker in it")
+    start.add_argument("--repo", required=True, help="the repository's clone URL")
+    start.add_argument("--profile", required=True)
+    start.add_argument("--brief", required=True, help="the brief, a file")
+    start.add_argument("--template", default=None, help="the e2b template (default: e2b's base)")
+    start.add_argument("--integration", default="main", help="the integration branch (main)")
+    start.add_argument("--prefix", default="claude/", help="the workers' branch prefix (claude/)")
+    start.add_argument("--profile-variable", default="CR_PROFILE")
+    start.add_argument("--opening", default=os.path.join(HERE, "opening.md"))
+    start.add_argument("--install", default=INSTALL, help="the command that installs the agent CLI")
+    start.add_argument("--timeout", type=int, default=3600, help="the sandbox's lifetime in seconds")
+    start.add_argument("--clone-timeout", type=int, default=600)
+    start.add_argument("--git-name", default=None)
+    start.add_argument("--git-email", default=None)
+
+    for name in ("brief", "log", "kill"):
+        s = sub.add_parser(name)
+        s.add_argument("--sandbox", required=True, help="the sandbox id `start` printed")
+        if name == "brief":
+            s.add_argument("--brief", required=True)
+
+    for s in (start, sub.choices["brief"]):
+        s.add_argument("--agent-args", default=AGENT_ARGS,
+                       help="extra arguments for each agent turn (%s)" % AGENT_ARGS)
+        s.add_argument("--workdir", default="/home/user/repo")
+    return p
+
+
+def main(argv):
+    args = parser().parse_args(argv)
+    if args.command == "start":
+        if not re.fullmatch(r"[a-z][a-z0-9-]*", args.profile):
+            fail("profile '%s' must match ^[a-z][a-z0-9-]*$" % args.profile, 2)
+    return {"start": cmd_start, "brief": cmd_brief, "log": cmd_log, "kill": cmd_kill}[args.command](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

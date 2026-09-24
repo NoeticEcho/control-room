@@ -2,6 +2,8 @@
 # Tests for runners/local/cr-worker. Each test clones a throwaway repository
 # from a bare "origin" and runs workers with a fake agent that records what it
 # was asked (tests/fixtures/fake-agent).
+# Expected text with backquotes sits in single quotes (SC2016).
+# shellcheck disable=SC2016
 
 bats_require_minimum_version 1.5.0
 
@@ -21,7 +23,7 @@ setup() {
 	export CR_AGENT="$BATS_TEST_DIRNAME/fixtures/fake-agent"
 	export FAKE_AGENT_LOG="$BATS_TEST_TMPDIR/agent.log"
 	unset CR_AGENT_ARGS CR_OPENING CR_PROFILE
-	cd "$repo"
+	cd "$repo" || return 1
 }
 
 # call <n>: the n-th recorded agent call (1-based), as JSON

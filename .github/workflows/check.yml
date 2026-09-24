@@ -19,5 +19,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends bats jq shellcheck python3-jsonschema
+      - name: Install the e2b SDK, for the fake SDK's contract test
+        run: python3 -m pip install --user --break-system-packages e2b==2.51.0
       - name: make check
+        env:
+          CR_REQUIRE_E2B_SDK: "1"
         run: make check
