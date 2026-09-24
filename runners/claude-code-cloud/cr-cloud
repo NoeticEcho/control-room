@@ -1,0 +1,98 @@
+#!/bin/sh
+# cr-cloud: brief control-room workers running as Claude Code cloud sessions.
+#
+#   cr-cloud opening <profile>                  print the opening message for a
+#                                               new worker session, filled in
+#   cr-cloud brief <session> <brief.md>         deliver a brief to a running
+#                                               session, as a user message
+#
+# <session> is the session's id (session_..., cse_...) or its claude.ai/code
+# URL. `brief` runs `claude -p "$(cat brief.md)" --cloud <session>`, which
+# queues the message into the session and exits (code.claude.com/docs/en/
+# claude-code-on-the-web, "Send follow-ups from the CLI"). It needs the CLI
+# signed in with `claude auth login` to the account that owns the session.
+#
+# Environment: CR_AGENT (default: claude); CR_OPENING (default:
+# prompts/en/worker-opening.md in this kit). Reads integration_branch from
+# control-room.json at the repository root when there is one (default main).
+#
+# Dependencies: POSIX sh; jq only to read control-room.json.
+
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+
+die() {
+	printf 'cr-cloud: %s\n' "$1" >&2
+	exit "${2:-1}"
+}
+
+usage() {
+	sed -n '4,8p' "$0" | sed 's/^# \{0,1\}//' >&2
+	exit 2
+}
+
+integration() {
+	root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo main; return; }
+	if [ -f "$root/control-room.json" ]; then
+		command -v jq >/dev/null 2>&1 || die "jq is needed to read $root/control-room.json"
+		jq -er '.integration_branch // "main" | strings' "$root/control-room.json" 2>/dev/null ||
+			die "$root/control-room.json is not valid"
+	else
+		echo main
+	fi
+}
+
+# replace <text> <from> <to>: every <from> in <text>, literally.
+replace() {
+	text=$1 out=
+	while :; do
+		case $text in
+		*"$2"*)
+			out=$out${text%%"$2"*}$3
+			text=${text#*"$2"}
+			;;
+		*) break ;;
+		esac
+	done
+	printf '%s' "$out$text"
+}
+
+cmd_opening() {
+	[ $# -eq 1 ] || usage
+	case $1 in
+	'' | [!a-z]* | *[!a-z0-9-]*) die "profile '$1' must match ^[a-z][a-z0-9-]*\$" 2 ;;
+	esac
+	file=${CR_OPENING:-$here/../../prompts/en/worker-opening.md}
+	[ -f "$file" ] || die "no opening message at $file"
+	branch=$(integration)
+	text=$(cat "$file")
+	text=$(replace "$text" '<profile>' "$1")
+	text=$(replace "$text" '<integration-branch>' "$branch")
+	text=$(replace "$text" '<main-branches>' "$branch")
+	printf '%s\n' "$text"
+}
+
+cmd_brief() {
+	[ $# -eq 2 ] || usage
+	session=$1
+	case $session in
+	'' | -*) die "'$session' is not a session id or URL" 2 ;;
+	esac
+	[ -f "$2" ] || die "no brief at $2" 2
+	brief=$(cat "$2")
+	[ -n "$brief" ] || die "the brief $2 is empty" 2
+	case $brief in
+	'EPIC '*': branch '*) ;;
+	*) printf 'cr-cloud: %s is not a brief (EPIC <id>: branch ...); the worker will answer it as a question\n' "$2" >&2 ;;
+	esac
+	"${CR_AGENT:-claude}" -p "$brief" --cloud "$session" </dev/null
+}
+
+[ $# -gt 0 ] || usage
+command=$1
+shift
+case $command in
+opening | brief) "cmd_$command" "$@" ;;
+*) usage ;;
+esac

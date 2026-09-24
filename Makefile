@@ -9,7 +9,8 @@
 check: lint test
 
 lint:
-	shellcheck scripts/guard runners/local/cr-worker tests/fixtures/fake-agent
+	shellcheck scripts/guard runners/local/cr-worker runners/claude-code-cloud/cr-cloud \
+		runners/claude-code-cloud/setup.sh tests/fixtures/fake-agent
 	shellcheck --shell=bash tests/*.bats
 	python3 -c 'import ast, sys; [ast.parse(open(f).read(), f) for f in sys.argv[1:]]' \
 		scripts/validate-handoff runners/e2b/cr-e2b tests/fixtures/e2b-contract.py tests/fixtures/fake-e2b/e2b/__init__.py
