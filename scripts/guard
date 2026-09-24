@@ -412,6 +412,12 @@ check_command() { # <segment words...>
 			[ $# -gt 2 ] || return 0
 			shift 2
 			;;
+		-u | -g | -C | -S)
+			# env -u NAME, sudo -u USER: an option of the wrapper with a value
+			[ -n "$wrapped" ] || break
+			[ $# -gt 2 ] || return 0
+			shift 2
+			;;
 		-*)
 			[ -n "$wrapped" ] || break
 			shift
