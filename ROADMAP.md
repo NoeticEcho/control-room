@@ -56,6 +56,13 @@
   `action`, `answered`, `done`, an issue template, and `desk/gh-desk` for the
   coordinator's hourly check.
 
+## CR-6: local-ci
+
+`ci/local-ci` runs a repository's check on the coordinator's machine and
+posts the verdict as a commit status, with no Actions minutes
+([`docs/local-ci.md`](docs/local-ci.md)). Written when hosted CI stopped
+starting jobs over billing.
+
 ## CR-4: an end-to-end example
 
 `examples/end-to-end/`: epic `wc-3` on a toy repository, as the files the

@@ -1,0 +1,260 @@
+#!/bin/sh
+# local-ci: check commits on a machine of your own and put the verdict on
+# GitHub as a commit status, with no GitHub Actions minutes (docs/local-ci.md).
+#
+#   local-ci run <repo> <ref>   check one commit (a sha, or a branch of the
+#                               repository's origin) and post its status
+#   local-ci poll [--prs]       check every watched branch's head that has no
+#                               verdict yet; with --prs, open pull requests'
+#                               heads too (same-repository ones only)
+#   local-ci status [<repo>]    the last verdicts
+#   local-ci repos              the configured repositories
+#
+# One check at a time on the machine: a second `run` or `poll` while one is
+# running says so and exits 0 (`run` exits 75), so a timer can call `poll`
+# as often as it likes.
+#
+# The configuration is JSON, at $LOCAL_CI_CONFIG (default
+# ${XDG_CONFIG_HOME:-~/.config}/local-ci/config.json):
+#
+#   {"context": "local-ci",
+#    "state": "~/.local/state/local-ci",
+#    "repos": [{"name": "app", "slug": "owner/app",
+#               "workdir": "/path/to/a/checkout/used/only/by/local-ci",
+#               "branches": ["main"], "check": "make check",
+#               "timeout": 3600}]}
+#
+# `workdir` is a checkout (or a worktree) that nothing else edits: local-ci
+# fetches into it and detaches it at the commit under check, and it refuses a
+# workdir with modified tracked files. Ignored files (dependency caches, build
+# output) stay between runs, which is what makes a second run fast.
+#
+# The check runs the repository's own code, as the user running local-ci.
+# Watch only repositories and branches whose authors you trust; `--prs` takes
+# no pull request from a fork.
+#
+# Environment:
+#   LOCAL_CI_CONFIG     the configuration file
+#   LOCAL_CI_NO_STATUS  when 1, check and record but post nothing to GitHub
+#
+# Dependencies: POSIX sh, git, jq, gh (signed in, allowed to write commit
+# statuses); timeout(1) when a repository sets `timeout`.
+
+set -eu
+
+die() {
+	printf 'local-ci: %s\n' "$1" >&2
+	exit "${2:-1}"
+}
+
+say() {
+	printf 'local-ci: %s\n' "$1" >&2
+}
+
+usage() {
+	sed -n '5,13p' "$0" | sed 's/^# \{0,1\}//' >&2
+	exit 2
+}
+
+command -v jq >/dev/null 2>&1 || die "needs jq" 2
+command -v git >/dev/null 2>&1 || die "needs git" 2
+
+# ---- configuration ---------------------------------------------------------
+
+config=${LOCAL_CI_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/local-ci/config.json}
+
+expand() {
+	case $1 in
+	\~) printf '%s\n' "$HOME" ;;
+	\~/*) printf '%s/%s\n' "$HOME" "${1#\~/}" ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+load_config() {
+	[ -f "$config" ] || die "no configuration at $config (docs/local-ci.md)" 2
+	jq -e '(.repos | type == "array") and all(.repos[]; (.name | type == "string") and (.slug | type == "string") and (.workdir | type == "string") and (.check | type == "string"))' \
+		"$config" >/dev/null 2>&1 ||
+		die "$config: needs repos[], each with name, slug, workdir and check" 2
+	context=$(jq -r '.context // "local-ci"' "$config")
+	state=$(expand "$(jq -r '.state // "~/.local/state/local-ci"' "$config")")
+	mkdir -p "$state"
+}
+
+# repo_field <name> <field> [default]
+repo_field() {
+	jq -r --arg n "$1" --arg f "$2" --arg d "${3-}" \
+		'first(.repos[] | select(.name == $n)) | .[$f] // $d | if type == "array" then .[] else . end' "$config"
+}
+
+need_repo() {
+	jq -e --arg n "$1" 'any(.repos[]; .name == $n)' "$config" >/dev/null ||
+		die "no repository named '$1' in $config" 2
+}
+
+# ---- the lock: one check at a time on this machine -----------------------
+
+lock=
+take_lock() {
+	lock=$state/lock
+	if mkdir "$lock" 2>/dev/null; then
+		echo $$ >"$lock/pid"
+		trap 'rm -rf "$lock"' EXIT
+		trap 'exit 130' INT TERM
+		return 0
+	fi
+	holder=$(cat "$lock/pid" 2>/dev/null || true)
+	if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
+		say "removing a stale lock left by process $holder"
+		rm -rf "$lock"
+		take_lock
+		return
+	fi
+	lock=
+	return 1
+}
+
+# ---- GitHub ----------------------------------------------------------------
+
+# post <slug> <sha> <state> <description>
+post() {
+	[ "${LOCAL_CI_NO_STATUS:-0}" = 1 ] && return 0
+	command -v gh >/dev/null 2>&1 || die "needs the GitHub CLI, gh (or LOCAL_CI_NO_STATUS=1)" 2
+	# A status is 140 characters at most.
+	desc=$(printf '%s' "$4" | cut -c1-140)
+	if ! gh api --method POST "repos/$1/statuses/$2" -f state="$3" -f context="$context" \
+		-f description="$desc" >/dev/null; then
+		say "could not post '$3' for $2 to $1; the verdict is still recorded in $state"
+	fi
+}
+
+# ---- run -------------------------------------------------------------------
+
+results() {
+	printf '%s/%s/results.tsv\n' "$state" "$1"
+}
+
+# verdict_of <name> <sha>: the recorded verdict, or nothing
+verdict_of() {
+	f=$(results "$1")
+	[ -f "$f" ] || return 0
+	awk -F '\t' -v s="$2" '$2 == s { v = $3 } END { if (v != "") print v }' "$f"
+}
+
+# check <name> <ref>: the lock must be held
+check() {
+	name=$1
+	ref=$2
+	slug=$(repo_field "$name" slug)
+	workdir=$(expand "$(repo_field "$name" workdir)")
+	cmd=$(repo_field "$name" check)
+	limit=$(repo_field "$name" timeout 0)
+	[ -d "$workdir" ] || die "$name: no workdir at $workdir" 2
+	git -C "$workdir" rev-parse --git-dir >/dev/null 2>&1 || die "$name: $workdir is not a git checkout" 2
+	if ! git -C "$workdir" diff --quiet HEAD -- 2>/dev/null; then
+		die "$name: $workdir has modified tracked files; local-ci needs a checkout of its own" 2
+	fi
+	git -C "$workdir" fetch --quiet origin || die "$name: git fetch failed in $workdir"
+	sha=$(git -C "$workdir" rev-parse --verify --quiet "origin/$ref^{commit}" ||
+		git -C "$workdir" rev-parse --verify --quiet "$ref^{commit}") ||
+		die "$name: no commit '$ref' in origin"
+	mkdir -p "$state/$name"
+	log=$state/$name/$sha.log
+	post "$slug" "$sha" pending "running on $(hostname)"
+	git -C "$workdir" -c advice.detachedHead=false checkout --quiet --detach "$sha" ||
+		die "$name: could not check out $sha in $workdir"
+	say "$name: checking $sha with '$cmd' (log: $log)"
+	start=$(date +%s)
+	set +e
+	if [ "$limit" -gt 0 ] 2>/dev/null; then
+		(cd "$workdir" && timeout "$limit" sh -c "$cmd") >"$log" 2>&1
+	else
+		(cd "$workdir" && sh -c "$cmd") >"$log" 2>&1
+	fi
+	code=$?
+	set -e
+	secs=$(($(date +%s) - start))
+	if [ "$code" -eq 0 ]; then
+		verdict=success
+		desc="passed in $secs s on $(hostname)"
+	elif [ "$code" -eq 124 ] && [ "$limit" -gt 0 ] 2>/dev/null; then
+		verdict=error
+		desc="timed out after $limit s on $(hostname); log $name/$sha.log"
+	else
+		verdict=failure
+		desc="failed (exit $code) in $secs s on $(hostname); log $name/$sha.log"
+	fi
+	printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$sha" "$verdict" "$secs" "$ref" "$log" >>"$(results "$name")"
+	post "$slug" "$sha" "$verdict" "$desc"
+	say "$name: $sha $verdict ($desc)"
+	[ "$verdict" = success ]
+}
+
+cmd_run() {
+	[ $# -eq 2 ] || usage
+	load_config
+	need_repo "$1"
+	take_lock || { say "another check is running (lock: $state/lock)"; exit 75; }
+	check "$1" "$2"
+}
+
+# heads <name> [--prs]: "<ref> <sha>" per watched branch and, with --prs, per
+# same-repository open pull request
+heads() {
+	workdir=$(expand "$(repo_field "$1" workdir)")
+	repo_field "$1" branches | while IFS= read -r b; do
+		[ -n "$b" ] || continue
+		sha=$(git -C "$workdir" ls-remote origin "refs/heads/$b" | cut -f1)
+		if [ -n "$sha" ]; then printf '%s %s\n' "$b" "$sha"; fi
+	done
+	if [ "${2-}" = --prs ]; then
+		gh pr list -R "$(repo_field "$1" slug)" --state open \
+			--json headRefName,headRefOid,isCrossRepository |
+			jq -r '.[] | select(.isCrossRepository | not) | "\(.headRefName) \(.headRefOid)"'
+	fi
+}
+
+cmd_poll() {
+	prs=
+	case ${1-} in
+	--prs) prs=--prs ;;
+	"") ;;
+	*) usage ;;
+	esac
+	load_config
+	take_lock || { say "another check is running; nothing to do now"; exit 0; }
+	# A red check does not fail poll: the status on GitHub is the answer.
+	for name in $(jq -r '.repos[].name' "$config"); do
+		heads "$name" $prs | while read -r ref sha; do
+			[ -z "$(verdict_of "$name" "$sha")" ] || continue
+			say "$name: $ref is at $sha, with no verdict yet"
+			check "$name" "$sha" || true
+		done
+	done
+}
+
+cmd_status() {
+	load_config
+	for name in $(jq -r '.repos[].name' "$config"); do
+		[ -z "${1-}" ] || [ "$1" = "$name" ] || continue
+		f=$(results "$name")
+		if [ -f "$f" ]; then
+			tail -n 5 "$f" | awk -F '\t' -v n="$name" '{ printf "%s  %s  %.12s  %-7s  %4ss  %s\n", n, $1, $2, $3, $4, $5 }'
+		else
+			printf '%s  no verdicts yet\n' "$name"
+		fi
+	done
+}
+
+cmd_repos() {
+	load_config
+	jq -r '.repos[] | "\(.name)\t\(.slug)\t\((.branches // []) | join(","))\t\(.check)"' "$config"
+}
+
+case ${1-} in
+run) shift && cmd_run "$@" ;;
+poll) shift && cmd_poll "$@" ;;
+status) shift && cmd_status "$@" ;;
+repos) shift && cmd_repos "$@" ;;
+*) usage ;;
+esac

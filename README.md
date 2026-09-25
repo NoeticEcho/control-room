@@ -57,6 +57,7 @@ brief (coordinator → worker, as a user message)
 | `docs/protocol.md` | Roles, the brief, the handoff, the READY/BLOCKED lines, the landing checklist |
 | `docs/runners.md` | How a worker is started and briefed on each runner |
 | `docs/desk.md` | The decision desk: what a card holds, statuses, reminders |
+| `docs/local-ci.md` | Checks on your own machine, verdicts on GitHub as commit statuses, no Actions minutes |
 | `docs/lessons.md` | What went wrong in practice, and the rule each failure produced |
 | `prompts/en/`, `prompts/ru/` | The master prompt, the owner interview, the coordinator session, the worker's opening message, the brief template |
 | `schemas/handoff.schema.json` | The handoff's JSON Schema, and an example |
@@ -65,6 +66,7 @@ brief (coordinator → worker, as a user message)
 | `scripts/guard` | The worker guard: a pre-command hook (or git pre-push hook) that refuses pushes to other branches, force pushes, tags, branch deletions and merges |
 | `scripts/validate-handoff` | Checks a handoff against the schema and the rules a schema cannot state |
 | `scripts/README.md` | How to wire the guard into `.claude/settings.json`, and what it does not catch |
+| `ci/local-ci` | Runs a repository's check locally and posts a `local-ci` commit status; one check at a time |
 | `runners/local/` | `cr-worker`: one git worktree and one headless Claude Code session per worker, briefed from the terminal |
 | `runners/e2b/` | `cr-e2b`: a worker in an e2b sandbox, started headless with the opening message and the brief |
 | `runners/claude-code-cloud/` | The cloud environment's setup script, the opening message, and `cr-cloud brief` for `claude -p --cloud` |
