@@ -72,7 +72,7 @@ repos/o/app/statuses/$sha state=success" ]
 @test "run: the status names no local path" {
 	sha=$(commit 'exit 1')
 	run "$LOCAL_CI" run app "$sha"
-	! grep -q "$BATS_TEST_TMPDIR" "$FAKE_GH_LOG"
+	run ! grep -q "$BATS_TEST_TMPDIR" "$FAKE_GH_LOG"
 	grep -q "log app/$sha.log" "$FAKE_GH_LOG"
 }
 
@@ -135,7 +135,7 @@ repos/o/app/statuses/$sha state=success" ]
 	[ "$(wc -l <"$state/app/results.tsv")" -eq 1 ]
 	run "$LOCAL_CI" poll
 	[ "$(wc -l <"$state/app/results.tsv")" -eq 1 ]
-	commit 'exit 0' >/dev/null
+	commit 'true' >/dev/null
 	run "$LOCAL_CI" poll
 	[ "$(wc -l <"$state/app/results.tsv")" -eq 2 ]
 }
@@ -165,7 +165,7 @@ repos/o/app/statuses/$sha state=success" ]
 	run "$LOCAL_CI" poll --prs
 	[ "$status" -eq 0 ]
 	grep -q "$mine" "$state/app/results.tsv"
-	! grep -q 0123456789 "$state/app/results.tsv"
+	run ! grep -q 0123456789 "$state/app/results.tsv"
 }
 
 @test "status and repos: read the records and the configuration" {
