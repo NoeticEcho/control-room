@@ -6,7 +6,7 @@
    and one semantic pigment (verdigris, "state") marks what is open. Light is the design system's
    Paper Mode, switched by data-theme on <html>.
 
-   The same file is shipped by noeticecho.github.io and by each project's docs site, so that the
+   The same file is shipped by open.noeticecho.space and by each project's docs site, so that the
    header and the type are the same everywhere. */
 
 :root { color-scheme: dark; }
