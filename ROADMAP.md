@@ -123,3 +123,7 @@ A coordinator that runs on a schedule, and starts every run with no memory
   - refuses a message while the worker is still in a turn (exit 75);
   - `cr-worker status` shows the epic, the branch, the turn and the last
     line, so a loop can check a local worker without disturbing it.
+
+## CR-8: an end-to-end transcript
+
+- `examples/end-to-end/transcript.md`: wc-3.2 run by a real worker session, from the brief to the lander's checks, every command with its real output (#8).
