@@ -88,3 +88,38 @@ What daily use of the desk taught, ported as behaviour:
   as text-only tooltips.
 - The Issues variant answers questions as `Q1 a` lines, which `gh-desk`
   passes through as written.
+
+## CR-7: the coordinator loop
+
+A coordinator that runs on a schedule, and starts every run with no memory
+([`docs/coordinator-loop.md`](docs/coordinator-loop.md)):
+
+- **The run:**
+  - read the queue, the journal and the desk;
+  - check each worker from git and its pull request;
+  - land what is ready, one at a time, with at most one full check per run;
+  - answer the blocked;
+  - question the silent;
+  - brief the idle;
+  - remind the owner;
+  - write one journal line.
+- **The rules:** what it never does; why every 30 minutes suits a two-core
+  machine; how to run it in Claude Code's scheduled tasks (checked against
+  the documentation), or in cron or any scheduler with `claude -p`.
+- **State in files:** `docs/templates/queue.md` (workers, sessions, current
+  and next epics, how to brief, how to land, what is pending) and
+  `docs/templates/journal.md` (one line per run). Every act updates both.
+- **The silent-worker rule:** no commit for more than two hours without
+  READY or BLOCKED means a status question, never a new brief.
+- **Two coordinators:**
+  - `scripts/land-lock` runs a landing under `flock` on a lock file that
+    every worktree shares, and exits 75 when the lock is held;
+  - under the lock, a landing first checks the sha is not already landed;
+  - a pause in the queue holds the loop while a person works;
+  - tested with bats, including two concurrent holders.
+- **Prompts:** `prompts/en/coordinator-loop.md` and
+  `prompts/ru/coordinator-loop.md`, self-contained.
+- **`cr-worker`:**
+  - refuses a message while the worker is still in a turn (exit 75);
+  - `cr-worker status` shows the epic, the branch, the turn and the last
+    line, so a loop can check a local worker without disturbing it.

@@ -113,6 +113,19 @@ included**.
    If it is red, revert and return the epic.
 8. Close, file, export the tracker, brief the next epic.
 
+## A silent worker
+
+A worker with no commit on its branch for more than two hours, and no READY
+or BLOCKED, gets a status question, never a new brief. Silence is not
+idleness: it may be in a long check, at a permission prompt, or on a
+restarted machine, and a brief on top of unfinished work stacks two epics in
+one session. Details, and the coordinator that runs on a schedule:
+[`docs/coordinator-loop.md`](coordinator-loop.md).
+
+When more than one coordinator can land (a person's and a scheduled loop),
+every landing runs under [`scripts/land-lock`](../scripts/land-lock) and
+first checks that the READY sha is not already on the integration branch.
+
 ## The tracker
 
 Any tracker works if three rules hold: **one writer** (the coordinator),
