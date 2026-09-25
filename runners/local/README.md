@@ -9,6 +9,7 @@ cr-worker new backend proj-12 login    # worktree + branch claude/proj-12-login
 cr-worker start backend                # the session, with the opening message
 cr-worker brief backend brief.md       # the brief, as the next user message
 cr-worker brief backend answer.md      # later: an answer, a question, the next brief
+cr-worker status backend               # epic, branch, in a turn or not, last line
 ```
 
 - **`new <profile> <epic> <slug>`** fetches the integration branch and makes a
@@ -26,12 +27,43 @@ cr-worker brief backend answer.md      # later: an answer, a question, the next 
 - **`brief <profile> <file>`** sends the file as the next user message in that
   session. A file that does not start `EPIC <id>: branch ...` still goes
   through, with a warning: the worker will treat it as a question.
+- **`status <profile>`** prints the worker's epic and branch, whether it is
+  in a turn (`not started`, `idle`, or `in a turn since <time> (pid <n>)`),
+  and the last line it printed:
+
+      profile: backend
+      epic: proj-12
+      branch: claude/proj-12-login
+      turn: idle
+      last: EPIC proj-12 READY <sha> <pr-url>
+
 - **`path <profile>`** prints the worktree; **`env <profile>`** prints
   `export CR_PROFILE=<profile>` for a shell of your own
   (`eval "$(cr-worker env backend)"`).
 
 Everything the agent prints is shown and appended to
 `.git/worktrees/<profile>/cr-worker/log`.
+
+**One turn at a time.** `start` and `brief` refuse, with exit status 75 and
+nothing sent, while the worker is still in a turn: a second message would
+resume the same session twice at once. `new` refuses too, rather than switch
+the branch under a working agent. The turn is marked by
+`.git/worktrees/<profile>/cr-worker/turn/`, which holds cr-worker's pid while
+the agent runs. It is removed when the turn ends, however it ends. A marker
+whose process is gone (a killed machine) is stale and taken over.
+
+## From a coordinator loop
+
+A scheduled coordinator ([`docs/coordinator-loop.md`](../../docs/coordinator-loop.md))
+must not wait for a worker's turn, which can take an hour. It starts the brief
+in the background, with the output kept in the worker's log:
+
+    nohup cr-worker brief docs brief.md >/dev/null 2>&1 &
+
+and on its next run reads `cr-worker status docs` beside the branch, the
+handoff and the pull request. Exit 75 from `brief` means the worker is in a
+turn: the loop tries on its next run. The loop's landings and full checks run
+under `scripts/land-lock` (the landing lock, and the heavy-job lock below).
 
 ## How the session works (Claude Code)
 
@@ -99,7 +131,8 @@ Worktrees share one repository, and workers share one machine.
   builds on a small machine time out, run out of memory, or fight over ports
   and caches, and a failure that is load, not code, costs a landing. Run
   heavy jobs one at a time (a lock such as `flock /tmp/cr-heavy.lock make
-  check` is enough), and give each worker its own ports and cache paths
+  check` is enough, or `scripts/land-lock --lock /tmp/cr-heavy.lock --wait
+  1800 -- make check`), and give each worker its own ports and cache paths
   where the stack needs them.
 - **Branches and refs are shared.** A branch is checked out in one worktree
   at a time; `new` refuses a branch that exists. The coordinator deletes
