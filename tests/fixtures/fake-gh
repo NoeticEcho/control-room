@@ -1,0 +1,14 @@
+#!/bin/sh
+# A stand-in for the GitHub CLI. Appends its arguments as one JSON line to
+# $FAKE_GH_LOG. For `issue list ... --label <l>` it prints
+# $FAKE_GH_DIR/<l>.json (or [] when there is none). Exits $FAKE_GH_EXIT.
+jq -cn '$ARGS.positional' --args -- "$@" >>"${FAKE_GH_LOG:?}"
+[ "${FAKE_GH_EXIT:-0}" -eq 0 ] || exit "$FAKE_GH_EXIT"
+if [ "${1-}" = issue ] && [ "${2-}" = list ]; then
+	label=
+	while [ $# -gt 0 ]; do
+		[ "$1" = --label ] && label=${2-}
+		shift
+	done
+	if [ -f "${FAKE_GH_DIR:?}/$label.json" ]; then cat "$FAKE_GH_DIR/$label.json"; else echo '[]'; fi
+fi
