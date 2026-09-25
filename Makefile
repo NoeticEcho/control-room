@@ -10,7 +10,7 @@
 check: lint test
 
 lint:
-	shellcheck scripts/guard runners/local/cr-worker runners/claude-code-cloud/cr-cloud \
+	shellcheck scripts/guard ci/local-ci runners/local/cr-worker runners/claude-code-cloud/cr-cloud \
 		runners/claude-code-cloud/setup.sh desk/gh-desk examples/end-to-end/replay.sh \
 		tests/fixtures/fake-agent tests/fixtures/fake-gh
 	shellcheck --shell=bash tests/*.bats
