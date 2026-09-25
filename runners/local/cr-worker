@@ -1,0 +1,246 @@
+#!/bin/sh
+# cr-worker: run control-room workers as local agent sessions, one git
+# worktree per profile (docs/runners.md § Local worktrees).
+#
+#   cr-worker new <profile> <epic> <slug>   worktree on <prefix><epic>-<slug>
+#                                           from the integration branch
+#   cr-worker start <profile>               start the agent's session there,
+#                                           with the opening message
+#   cr-worker brief <profile> <brief.md>    deliver a brief (or a question) as
+#                                           a user message to that session
+#   cr-worker path <profile>                print the worktree's path
+#   cr-worker env <profile>                 print the worker's environment, to
+#                                           eval in a shell of your own
+#
+# Run from the repository (any worktree of it). Reads control-room.json at its
+# root: integration_branch (main), branch_prefix (claude/), profile_variable
+# (CR_PROFILE).
+#
+# Environment:
+#   CR_AGENT        the agent CLI (default: claude)
+#   CR_AGENT_ARGS   extra arguments for every agent call, split on spaces,
+#                   e.g. "--permission-mode acceptEdits"
+#   CR_WORKTREES    where the worktrees go (default: <repo>/../<repo>-workers)
+#   CR_OPENING      the opening message template (default: opening.md next to
+#                   this script)
+#
+# The session is Claude Code's headless mode: `start` runs
+#   claude -p <opening> --session-id <uuid>
+# and each `brief` runs
+#   claude -p <brief> --resume <uuid>
+# in the worktree, so every brief is a user message in the same conversation.
+#
+# Dependencies: POSIX sh, git, jq (for control-room.json).
+
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+
+die() {
+	printf 'cr-worker: %s\n' "$1" >&2
+	exit "${2:-1}"
+}
+
+usage() {
+	sed -n '4,15p' "$0" | sed 's/^# \{0,1\}//' >&2
+	exit 2
+}
+
+# ---- configuration ---------------------------------------------------------
+
+load_config() {
+	root=$(git rev-parse --show-toplevel 2>/dev/null) ||
+		die "run this inside the repository"
+	# The main worktree, so that every worktree agrees on where workers live.
+	common=$(git rev-parse --path-format=absolute --git-common-dir)
+	main_root=$(dirname "$common")
+	integration=main
+	prefix=claude/
+	profile_var=CR_PROFILE
+	config=$main_root/control-room.json
+	[ -f "$config" ] || config=$root/control-room.json
+	if [ -f "$config" ]; then
+		command -v jq >/dev/null 2>&1 || die "jq is needed to read $config"
+		values=$(jq -r '
+			[(.integration_branch // "main"), (.branch_prefix // "claude/"),
+			 (.profile_variable // "CR_PROFILE")]
+			| if all(type == "string" and length > 0) then .[] else error("bad") end
+			' "$config" 2>/dev/null) || die "$config is not valid"
+		integration=$(printf '%s\n' "$values" | sed -n 1p)
+		prefix=$(printf '%s\n' "$values" | sed -n 2p)
+		profile_var=$(printf '%s\n' "$values" | sed -n 3p)
+	fi
+	case $profile_var in
+	[A-Za-z_]*) ;;
+	*) die "profile_variable $profile_var is not a variable name" ;;
+	esac
+	case $profile_var in *[!A-Za-z0-9_]*) die "profile_variable $profile_var is not a variable name" ;; esac
+	workers=${CR_WORKTREES:-$(dirname "$main_root")/$(basename "$main_root")-workers}
+	agent=${CR_AGENT:-claude}
+	agent_args=${CR_AGENT_ARGS:-}
+}
+
+check_profile() {
+	case $1 in
+	'' | [!a-z]* | *[!a-z0-9-]*) die "profile '$1' must match ^[a-z][a-z0-9-]*\$ (as in the handoff schema)" 2 ;;
+	esac
+}
+
+# worker <profile>: sets wt (the worktree) and state (its private directory
+# inside the worktree's git dir, which no commit can pick up).
+worker() {
+	check_profile "$1"
+	profile=$1
+	wt=$workers/$profile
+	state=
+	if [ -d "$wt" ]; then
+		state=$(git -C "$wt" rev-parse --absolute-git-dir)/cr-worker
+	fi
+}
+
+need_worker() {
+	{ [ -n "$state" ] && [ -f "$state/session-id" ]; } ||
+		die "no worker '$profile' at $wt; make it with: cr-worker new $profile <epic> <slug>"
+}
+
+new_session_id() {
+	# A random (version 4) UUID, which --session-id requires.
+	od -An -N16 -tx1 /dev/urandom | tr -d ' \n' |
+		sed 's/^\(.\{8\}\)\(.\{4\}\).\(.\{3\}\).\(.\{3\}\)\(.\{12\}\)$/\1-\2-4\3-a\4-\5/'
+}
+
+# replace <text> <from> <to>: every <from> in <text>, literally.
+replace() {
+	text=$1 out=
+	while :; do
+		case $text in
+		*"$2"*)
+			out=$out${text%%"$2"*}$3
+			text=${text#*"$2"}
+			;;
+		*) break ;;
+		esac
+	done
+	printf '%s' "$out$text"
+}
+
+# run_agent <prompt> <session flag> <session id>: the agent in the worktree,
+# with the profile set; its output goes to the terminal and to the log.
+run_agent() {
+	log=$state/log
+	printf '\n==== %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" >>"$log"
+	status_file=$state/status
+	echo 1 >"$status_file"
+	# shellcheck disable=SC2086 # CR_AGENT_ARGS is a list of arguments
+	(
+		cd "$wt"
+		export "$profile_var=$profile"
+		set +e
+		$agent -p "$1" "$2" "$3" $agent_args </dev/null
+		echo $? >"$status_file"
+	) 2>&1 | tee -a "$log"
+	return "$(cat "$status_file")"
+}
+
+# ---- commands --------------------------------------------------------------
+
+cmd_new() {
+	[ $# -eq 3 ] || usage
+	worker "$1"
+	epic=$2
+	branch=$prefix$2-$3
+	git check-ref-format --branch "$branch" >/dev/null 2>&1 ||
+		die "$branch is not a valid branch name" 2
+	if git show-ref --verify --quiet "refs/heads/$branch"; then
+		die "branch $branch already exists"
+	fi
+	base=$integration
+	if git remote get-url origin >/dev/null 2>&1; then
+		git fetch --quiet origin "$integration" || die "cannot fetch origin $integration"
+		base=origin/$integration
+	fi
+	git rev-parse --verify --quiet "$base^{commit}" >/dev/null ||
+		die "no integration branch $base"
+
+	if [ -d "$wt" ]; then
+		[ -z "$(git -C "$wt" status --porcelain)" ] ||
+			die "the worktree $wt has uncommitted changes; the worker's last epic is not finished"
+		# --no-track: a branch that tracks the integration branch lets a bare
+		# `git push` land there.
+		git -C "$wt" switch --quiet --no-track -c "$branch" "$base"
+	else
+		mkdir -p "$workers"
+		git worktree add --quiet --no-track -b "$branch" "$wt" "$base"
+	fi
+
+	worker "$profile"
+	mkdir -p "$state"
+	printf '%s\n' "$profile" >"$state/profile"
+	printf '%s\n' "$epic" >"$state/epic"
+	printf '%s\n' "$branch" >"$state/branch"
+	printf '%s=%s\n' "$profile_var" "$profile" >"$state/env"
+	# One session per worker, kept across epics: the next brief goes to the
+	# session that did the last one.
+	[ -f "$state/session-id" ] || new_session_id >"$state/session-id"
+	printf 'worker %s: %s on %s, from %s\n' "$profile" "$wt" "$branch" "$base"
+}
+
+cmd_start() {
+	[ $# -eq 1 ] || usage
+	worker "$1"
+	need_worker
+	[ ! -f "$state/started" ] ||
+		die "worker '$profile' is already started; send it a brief: cr-worker brief $profile <brief.md>"
+	opening_file=${CR_OPENING:-$here/opening.md}
+	[ -f "$opening_file" ] || die "no opening message at $opening_file"
+	opening=$(cat "$opening_file")
+	opening=$(replace "$opening" '<profile>' "$profile")
+	opening=$(replace "$opening" '<profile-variable>' "$profile_var")
+	opening=$(replace "$opening" '<integration-branch>' "$integration")
+	opening=$(replace "$opening" '<prefix>' "$prefix")
+	opening=$(replace "$opening" '<branch>' "$(cat "$state/branch")")
+	session=$(cat "$state/session-id")
+	run_agent "$opening" --session-id "$session"
+	: >"$state/started"
+}
+
+cmd_brief() {
+	[ $# -eq 2 ] || usage
+	worker "$1"
+	need_worker
+	[ -f "$state/started" ] || die "worker '$profile' is not started: cr-worker start $profile"
+	[ -f "$2" ] || die "no brief at $2" 2
+	brief=$(cat "$2")
+	[ -n "$brief" ] || die "the brief $2 is empty" 2
+	case $brief in
+	'EPIC '*': branch '*) ;;
+	*) printf 'cr-worker: %s is not a brief (EPIC <id>: branch ...); the worker will answer it as a question\n' "$2" >&2 ;;
+	esac
+	run_agent "$brief" --resume "$(cat "$state/session-id")"
+}
+
+cmd_path() {
+	[ $# -eq 1 ] || usage
+	worker "$1"
+	need_worker
+	printf '%s\n' "$wt"
+}
+
+cmd_env() {
+	[ $# -eq 1 ] || usage
+	worker "$1"
+	need_worker
+	printf 'export %s\n' "$(cat "$state/env")"
+}
+
+[ $# -gt 0 ] || usage
+command=$1
+shift
+case $command in
+new | start | brief | path | env)
+	load_config
+	"cmd_$command" "$@"
+	;;
+-h | --help | help) usage ;;
+*) usage ;;
+esac
