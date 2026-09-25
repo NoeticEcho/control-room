@@ -15,14 +15,16 @@ setup() {
 	mkdir -p "$FAKE_GH_DIR"
 	# 2026-09-25T12:00:00Z
 	export GH_DESK_NOW=1790337600
-	unset GH_DESK_REPO FAKE_GH_EXIT FAKE_GH_FAIL_LABEL
+	unset GH_DESK_REPO FAKE_GH_EXIT FAKE_GH_FAIL_LABEL LAST_COMMENT
 }
 
-# issue <number> <title> <createdAt> <comments> <labels...>
+# issue <number> <title> <createdAt> <comments> <labels...>; the last comment's
+# body is $LAST_COMMENT when set, else "c"
 issue() {
-	jq -cn --argjson n "$1" --arg t "$2" --arg c "$3" --argjson k "$4" '
+	jq -cn --argjson n "$1" --arg t "$2" --arg c "$3" --argjson k "$4" --arg last "${LAST_COMMENT-c}" '
 		{number: $n, title: $t, createdAt: $c, url: "https://github.com/o/r/issues/\($n)",
-		 comments: [range($k) | {body: "c"}], labels: [$ARGS.positional[] | {name: .}]}' --args -- "${@:5}"
+		 comments: [range($k) | {body: (if . == $k - 1 then $last else "c" end)}],
+		 labels: [$ARGS.positional[] | {name: .}]}' --args -- "${@:5}"
 }
 
 @test "list: asks gh for open decision and action issues, with the fields it reads" {
@@ -50,12 +52,14 @@ issue() {
 	[ "$status" -eq 0 ]
 	[ "${lines[0]}" = "Answered: act on these (1):" ]
 	[[ "${lines[1]}" == "  #12 decision"*"Pick the retention period"*"(open 3h, 3 comments) https://github.com/o/r/issues/12" ]]
-	[ "${lines[2]}" = "Waiting on the owner (2):" ]
+	[ "${lines[2]}" = "    answer, the last comment as written:" ]
+	[ "${lines[3]}" = "    > c" ]
+	[ "${lines[4]}" = "Waiting on the owner (2):" ]
 	# oldest first, not by number
-	[[ "${lines[3]}" == "  #15 decision"*"(open 26h, 1 comment) "* ]]
-	[[ "${lines[4]}" == "  #14 action"*"(open 2h, 0 comments) "* ]]
-	[ "${lines[5]}" = "desk: 2 waiting on the owner, 1 answered; most urgent: #15 Create the docs environment (open 26h)" ]
-	[ "${#lines[@]}" -eq 6 ]
+	[[ "${lines[5]}" == "  #15 decision"*"(open 26h, 1 comment) "* ]]
+	[[ "${lines[6]}" == "  #14 action"*"(open 2h, 0 comments) "* ]]
+	[ "${lines[7]}" = "desk: 2 waiting on the owner, 1 answered; most urgent: #15 Create the docs environment (open 26h)" ]
+	[ "${#lines[@]}" -eq 8 ]
 }
 
 @test "list: an issue with both labels is listed once; ages past two days are in days" {
@@ -64,6 +68,27 @@ issue() {
 	run "$GH_DESK"
 	[ "$(grep -c '^  #7 ' <<<"$output")" -eq 1 ]
 	[[ "$output" == *"(open 5d, 0 comments)"* ]]
+}
+
+@test "list: an answered card's last comment is passed through unchanged, Q1 a lines and all" {
+	# Shell and printf metacharacters, blank and indented lines, a tab, and
+	# non-ASCII (\303\211 is E acute, \342\234\223 a check mark) must come back as written.
+	# shellcheck disable=SC2016
+	body=$(printf 'Q1 a\nQ3 b\n\n  Ship it this week; keep $HOME, `ls`, %%s, \\n and "quotes" as they are.\n\303\211tape 2: ok\t\342\234\223')
+	{ echo '['; LAST_COMMENT=$body issue 21 "Three calls" 2026-09-25T11:00:00Z 2 decision answered; echo ']'; } >"$FAKE_GH_DIR/decision.json"
+	run "$GH_DESK"
+	[ "$status" -eq 0 ]
+	[ "${lines[2]}" = "    answer, the last comment as written:" ]
+	passed=$(printf '%s\n' "$output" | sed -n '/^    > /s/^    > //p')
+	[ "$passed" = "$body" ]
+	[ "${lines[3]}" = "    > Q1 a" ]
+	[ "${lines[4]}" = "    > Q3 b" ]
+}
+
+@test "list: an answered card with no comment says so" {
+	{ echo '['; issue 22 "Silent" 2026-09-25T11:00:00Z 0 action answered; echo ']'; } >"$FAKE_GH_DIR/action.json"
+	run "$GH_DESK"
+	[ "${lines[2]}" = "    no comment: the answered label is set, but nothing was written" ]
 }
 
 @test "list: a card labelled done but still open is flagged to close" {

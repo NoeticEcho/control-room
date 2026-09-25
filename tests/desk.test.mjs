@@ -272,6 +272,11 @@ test("glossary: terms are wrapped in title, why, context, steps, choices and que
     for (const b of buttons) assert.equal(b.localName, "button");
     for (const b of buttons) assert.equal(b.getAttribute("type"), "button");
   }
+  const q = all(node, attr("data-question", "Q1")).find((e) => e.localName === "fieldset");
+  assert.equal(all(all(q, tag("legend"))[0], cls("term")).length, 1, "in the question's text");
+  assert.equal(all(all(q, cls("pill"))[0], cls("term")).length, 1, "in an option's label");
+  const c = all(node, attr("data-field", "choices"))[0];
+  assert.equal(all(c, cls("term")).length, 2, "in a choice's label and its consequence");
 });
 
 test("glossary: a <script> in a summary or a term stays text", () => {

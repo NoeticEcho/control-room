@@ -17,9 +17,30 @@ light and dark themes (the system's, or chosen with the Theme button).
   `desk.example.json`, or the file named by `?src=`. Opened straight from disk
   (`file://`), the browser does not let a page read files next to it, so the
   page asks for the file: **Open a desk file**, or drop it on the page.
+- **Every card is checked before it is shown.** A card that does not fit the
+  schema is shown at the top as malformed, naming the field and holding its
+  raw JSON, never dropped or half-rendered.
+- **Several questions in one card** render as rows of pills, the key in
+  monospace and the recommended option marked. The answer's note is composed
+  as one `<id> <key>` line per answered question, then the free text; a live
+  preview shows what goes to the coordinator.
+- **Quoting.** On an open card, each context paragraph has a "↩" button (on
+  hover, or always on touch screens) that adds `<ID>: ` to the answer when the
+  paragraph starts with an id (`Q3`, `ABC-12`, `wc-3.1`), else a quote of up to
+  80 characters and ` — `.
+- **A glossary.** Terms, epics and abbreviations from the desk's `glossary`,
+  and ids matching its `idPattern`, are underlined and explained in a tooltip
+  on hover, focus or tap.
+- **Nothing becomes HTML.** The page builds every node with `createElement` and
+  puts every text in as text, glossary summaries included.
 - **The format** is [`desk.schema.json`](desk.schema.json);
-  [`desk.example.json`](desk.example.json) has three cards: an environment to
-  create, a decision with choices, and a question answered with a note.
+  [`desk.example.json`](desk.example.json) has four cards (an environment to
+  create, three questions in one card, a decision with choices, a question
+  answered with a note) and a glossary with an alias and an id pattern.
+
+| Phone, light | Phone, dark, and a malformed card | Desktop, dark, a term explained |
+|---|---|---|
+| ![](screenshots/390-light-tooltip.png) | ![](screenshots/390-dark.png) ![](screenshots/390-light-malformed.png) | ![](screenshots/1280-dark-tooltip.png) |
 
 ### Answers: a snippet to paste, not a file to download
 
@@ -51,10 +72,13 @@ and the coordinator writes it into `desk.json`. Why not a download:
 ## Checks
 
 `tests/desk.test.mjs` (`node --test`, no dependencies) runs the page's own
-script and checks that the example renders without problems, that every card
-field of the schema appears, that texts are whole with a copy button each,
-that card text cannot inject markup and only web and mail links are
-followed, and the shape of the answer snippet. `tests/examples.bats` checks
+script against a minimal DOM whose `innerHTML` throws, and checks: the example
+renders without problems and shows every field of the schema; a malformed card
+is shown with its field and raw JSON; the page's card check agrees with
+`jsonschema` on every card in `tests/fixtures/desk/cards/`; the note composed
+from questions; the quote line with and without a leading id; glossary
+wrapping (longest match, no match inside a word, aliases, the id pattern) and
+that a `<script>` in a summary stays text. `tests/examples.bats` checks
 the example against the schema.
 
 The page was also driven in Chromium (2026-09-25, not part of `make check`):

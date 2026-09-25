@@ -66,3 +66,18 @@ runs the validator on every handoff.
 
 Next: the same epic run by a real worker session on a public repository,
 recorded as a transcript.
+
+## CR-5: desk answers
+
+What daily use of the desk taught, ported as behaviour:
+
+- **The page checks each card** against the schema before rendering, and shows
+  a card that does not fit as malformed, with its raw JSON. A field the page
+  silently ignored once hid every recommendation for days.
+- **Structured questions:** several questions in one card, answered with
+  pills; the note is composed as `<id> <key>` lines, with a live preview.
+- **Quoting** a context paragraph into the answer with one tap.
+- **A glossary** of terms, epics and abbreviations, and an id pattern, shown
+  as text-only tooltips.
+- The Issues variant answers questions as `Q1 a` lines, which `gh-desk`
+  passes through as written.

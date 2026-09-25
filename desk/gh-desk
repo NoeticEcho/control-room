@@ -1,15 +1,18 @@
 #!/bin/sh
 # gh-desk: the decision desk on GitHub Issues (desk/github-issues.md).
 #
-#   gh-desk          list the cards: answered ones (act on them), then the
-#                    ones waiting on the owner, oldest first, then one summary
-#                    line for the coordinator's hourly reminder
+#   gh-desk          list the cards: answered ones (act on them), each with
+#                    its last comment passed through unchanged, then the ones
+#                    waiting on the owner, oldest first, then one summary line
+#                    for the coordinator's hourly reminder
 #   gh-desk labels   create or update the labels decision, action, answered,
 #                    done
 #
 # A card is an open issue labelled `decision` or `action`. The owner answers
-# in a comment and adds `answered`; the coordinator acts, says what it did in
-# a comment, adds `done` and closes the issue.
+# in a comment (one `Q1 a` line per question, then any note) and adds
+# `answered`; the coordinator acts, says what it did in a comment, adds `done`
+# and closes the issue. The answer is printed as written, each line behind
+# "    > ", never parsed or rewrapped: it is data for the coordinator.
 #
 # Environment: GH_DESK_REPO (owner/repo; default: the repository gh finds
 # from the current directory), GH_DESK_NOW (the time as epoch seconds, for
@@ -65,9 +68,15 @@ cmd_list() {
 		| sort_by(.createdAt) as $cards
 		| def age: if .hours < 48 then "\(.hours)h" else "\(.hours / 24 | floor)d" end;
 		  def line: "  #\(.number) \(.kind)\t\(.title)\t(open \(age), \(.ncomments) comment\(if .ncomments == 1 then "" else "s" end)) \(.url)";
+		  def answer:
+			if (.comments | length) > 0
+			then "    answer, the last comment as written:", (.comments[-1].body | split("\n")[] | "    > " + .)
+			else "    no comment: the answered label is set, but nothing was written" end;
 		  def group($state; $heading):
 			[$cards[] | select(.state == $state)] as $g
-			| if ($g | length) > 0 then "\($heading) (\($g | length)):", ($g[] | line) else empty end;
+			| if ($g | length) > 0
+			  then "\($heading) (\($g | length)):", ($g[] | line, (if $state == "answered" then answer else empty end))
+			  else empty end;
 		group("answered"; "Answered: act on these"),
 		group("open"; "Waiting on the owner"),
 		group("done"; "Done but still open: close them"),
