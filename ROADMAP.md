@@ -46,12 +46,23 @@
 
 ## CR-3: the desk
 
-- `desk/index.html` renders `desk.json` with copy buttons, and works without
-  a server.
-- `desk/github-issues.md`: the Issues variant, with labels and a reminder
-  script.
+- `desk/index.html` renders `desk.json` with no server and no framework:
+  every card field, whole texts with copy buttons, choices with the
+  recommended one marked, light and dark, phone width. An answer is a JSON
+  snippet to paste to the coordinator, the desk's only writer.
+  `desk/desk.schema.json` states the card; `desk/desk.example.json` has three
+  cards. Tested in node without dependencies.
+- `desk/github-issues.md`: the Issues variant, with the labels `decision`,
+  `action`, `answered`, `done`, an issue template, and `desk/gh-desk` for the
+  coordinator's hourly check.
 
 ## CR-4: an end-to-end example
 
-A small public example repository, run through one full epic: brief, worker,
-READY, landing. Recorded as a transcript.
+`examples/end-to-end/`: epic `wc-3` on a toy repository, as the files the
+protocol produces (brief, handoff at `working` and `ready`, recorded check,
+READY line, landing notes, desk card and answer). Written by a replay with
+real git commands and fixed dates; `make check` replays it, compares, and
+runs the validator on every handoff.
+
+Next: the same epic run by a real worker session on a public repository,
+recorded as a transcript.

@@ -1,0 +1,50 @@
+{
+  "epic": "wc-3",
+  "profile": "backend",
+  "session": "cr-worker:backend",
+  "branch": "claude/wc-3-count-words",
+  "status": "ready",
+  "base": "6997cfe1b1f911afcfde1f9ac28d98ec86761256",
+  "children": [
+    {
+      "id": "wc-3.1",
+      "outcome": "done",
+      "commits": [
+        "c25fff009a37aa7cc3e776209868cc786fff6f43"
+      ]
+    },
+    {
+      "id": "wc-3.2",
+      "outcome": "deferred",
+      "note": "Waits on the owner: which spaces separate words (questions[0], desk card wc-3-unicode)."
+    }
+  ],
+  "questions": [
+    {
+      "text": "wc-3.2: awk splits words on ASCII blanks only. Should wordcount split on every Unicode space (my recommendation), keep ASCII and document it, or use a segmenter library (a first dependency)?",
+      "blocking": false
+    }
+  ],
+  "runs": [
+    "run-wc-3-1"
+  ],
+  "lane": {
+    "verdict": "passed",
+    "seconds": 0,
+    "head": "c25fff009a37aa7cc3e776209868cc786fff6f43",
+    "gates": [
+      {
+        "id": "check.sh",
+        "outcome": "passed"
+      }
+    ]
+  },
+  "discovered": [
+    {
+      "text": "wordcount reads a file only on standard input; `sh wordcount file` silently ignores the argument.",
+      "paths": [
+        "wordcount"
+      ]
+    }
+  ]
+}

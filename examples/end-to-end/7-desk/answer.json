@@ -1,0 +1,9 @@
+{
+  "card": "wc-3-unicode",
+  "status": "answered",
+  "answer": {
+    "choice": "unicode-spaces",
+    "note": "Yes, and say in the README that scripts without spaces are not segmented.",
+    "at": "2026-09-25T09:32:00.000Z"
+  }
+}

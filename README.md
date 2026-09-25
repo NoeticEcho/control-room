@@ -45,6 +45,10 @@ brief (coordinator → worker, as a user message)
    e2b sandboxes, or local worktrees.
 4. **Pick a desk** from [`docs/desk.md`](docs/desk.md): GitHub Issues, or the
    static page in [`desk/`](desk/).
+5. **See one epic end to end** in
+   [`examples/end-to-end/`](examples/end-to-end/): the brief, the handoff at
+   `working` and at `ready`, the recorded check, the READY line, the landing
+   notes and a desk card, all from one replayed run.
 
 ## What is in the box
 
@@ -56,7 +60,8 @@ brief (coordinator → worker, as a user message)
 | `docs/lessons.md` | What went wrong in practice, and the rule each failure produced |
 | `prompts/en/`, `prompts/ru/` | The master prompt, the owner interview, the coordinator session, the worker's opening message, the brief template |
 | `schemas/handoff.schema.json` | The handoff's JSON Schema, and an example |
-| `desk/` | A static desk page that reads a JSON queue (CR-3, see ROADMAP) |
+| `desk/` | The decision desk: a static page (`index.html`) over `desk.json` with its schema and an example, and the GitHub Issues variant with `gh-desk` for the hourly check |
+| `examples/end-to-end/` | One epic on a toy repository, as the files the protocol produces, written by a replay that `make check` reruns |
 | `scripts/guard` | The worker guard: a pre-command hook (or git pre-push hook) that refuses pushes to other branches, force pushes, tags, branch deletions and merges |
 | `scripts/validate-handoff` | Checks a handoff against the schema and the rules a schema cannot state |
 | `scripts/README.md` | How to wire the guard into `.claude/settings.json`, and what it does not catch |

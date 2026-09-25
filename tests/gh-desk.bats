@@ -15,7 +15,7 @@ setup() {
 	mkdir -p "$FAKE_GH_DIR"
 	# 2026-09-25T12:00:00Z
 	export GH_DESK_NOW=1790337600
-	unset GH_DESK_REPO FAKE_GH_EXIT
+	unset GH_DESK_REPO FAKE_GH_EXIT FAKE_GH_FAIL_LABEL
 }
 
 # issue <number> <title> <createdAt> <comments> <labels...>
@@ -38,12 +38,12 @@ issue() {
 		echo '['
 		issue 12 "Pick the retention period" 2026-09-25T09:00:00Z 3 decision answered
 		echo ','
-		issue 15 "Licence of the sample text" 2026-09-25T10:00:00Z 0 decision
+		issue 15 "Create the docs environment" 2026-09-24T10:00:00Z 1 decision
 		echo ']'
 	} >"$FAKE_GH_DIR/decision.json"
 	{
 		echo '['
-		issue 14 "Create the docs environment" 2026-09-24T10:00:00Z 1 action
+		issue 14 "Licence of the sample text" 2026-09-25T10:00:00Z 0 action
 		echo ']'
 	} >"$FAKE_GH_DIR/action.json"
 	run "$GH_DESK"
@@ -51,9 +51,10 @@ issue() {
 	[ "${lines[0]}" = "Answered: act on these (1):" ]
 	[[ "${lines[1]}" == "  #12 decision"*"Pick the retention period"*"(open 3h, 3 comments) https://github.com/o/r/issues/12" ]]
 	[ "${lines[2]}" = "Waiting on the owner (2):" ]
-	[[ "${lines[3]}" == "  #14 action"*"(open 26h, 1 comment) "* ]]
-	[[ "${lines[4]}" == "  #15 decision"*"(open 2h, 0 comments) "* ]]
-	[ "${lines[5]}" = "desk: 2 waiting on the owner, 1 answered; most urgent: #14 Create the docs environment (open 26h)" ]
+	# oldest first, not by number
+	[[ "${lines[3]}" == "  #15 decision"*"(open 26h, 1 comment) "* ]]
+	[[ "${lines[4]}" == "  #14 action"*"(open 2h, 0 comments) "* ]]
+	[ "${lines[5]}" = "desk: 2 waiting on the owner, 1 answered; most urgent: #15 Create the docs environment (open 26h)" ]
 	[ "${#lines[@]}" -eq 6 ]
 }
 
@@ -87,6 +88,14 @@ issue() {
 	FAKE_GH_EXIT=4 run "$GH_DESK"
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"gh issue list failed"* ]]
+}
+
+@test "list: a failure of either gh call is the command's failure" {
+	FAKE_GH_FAIL_LABEL=decision run "$GH_DESK"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"gh issue list failed"* ]]
+	FAKE_GH_FAIL_LABEL=action run "$GH_DESK"
+	[ "$status" -eq 1 ]
 }
 
 @test "labels: creates or updates the four labels" {
