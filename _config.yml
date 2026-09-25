@@ -11,13 +11,13 @@ title: control-room
 description: >-
   One person, one AI coordinator, many AI coding agents: a protocol, prompts and scripts
   for running them in parallel, with one desk for the decisions only the person can make.
-url: https://noeticecho.github.io
+url: https://open.noeticecho.space
 baseurl: /control-room
 lang: en
 repository: NoeticEcho/control-room
 repository_url: https://github.com/NoeticEcho/control-room
 branch: main
-logo: https://noeticecho.github.io/icon-512.png
+logo: https://open.noeticecho.space/icon-512.png
 
 # jekyll-seo-tag reads title, description, url, baseurl, lang, logo and each page's image. With
 # an image and no twitter.card set, it writes a summary_large_image card.
@@ -55,7 +55,7 @@ defaults:
     values:
       layout: default
       image:
-        path: https://noeticecho.github.io/social/control-room.png
+        path: https://open.noeticecho.space/social/control-room.png
         width: 1280
         height: 640
         alt: "control-room: one person, one AI coordinator, many AI coding agents, and one desk for the owner's decisions."
