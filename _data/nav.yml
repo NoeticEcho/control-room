@@ -1,0 +1,38 @@
+# The documentation's navigation, in reading order. Each url is a page's URL without the
+# baseurl; _includes/nav.html adds it. A README is the page of its directory.
+- group: The protocol
+  items:
+    - title: Overview
+      url: /
+    - title: The protocol
+      url: /docs/protocol.html
+    - title: Runners
+      url: /docs/runners.html
+    - title: The decision desk
+      url: /docs/desk.html
+    - title: local-ci
+      url: /docs/local-ci.html
+    - title: Lessons
+      url: /docs/lessons.html
+    - title: Roadmap
+      url: /ROADMAP.html
+- group: In the box
+  items:
+    - title: The master prompt
+      url: /prompts/en/master.html
+    - title: One epic end to end
+      url: /examples/end-to-end/
+    - title: The worker guard
+      url: /scripts/
+    - title: The desk, two ways
+      url: /desk/
+- group: Runners
+  items:
+    - title: Claude Code cloud
+      url: /runners/claude-code-cloud/
+    - title: Local worktrees
+      url: /runners/local/
+    - title: e2b sandboxes
+      url: /runners/e2b/
+    - title: Codex
+      url: /runners/codex/
