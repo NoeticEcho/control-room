@@ -1,6 +1,32 @@
 {
   "$schema": "./desk.schema.json",
   "updated": "2026-09-25T09:40:00Z",
+  "glossary": [
+    {
+      "term": "wc-3",
+      "summary": "Epic: count words, not only lines (`wordcount -w`). wc-3.1 landed; wc-3.2 waits on the owner."
+    },
+    {
+      "term": "wc-4",
+      "summary": "Epic: the user guide, assigned to the docs worker."
+    },
+    {
+      "term": "CR_PROFILE",
+      "summary": "The environment variable that names a worker's profile. The agent's instructions read it to know which worker they are."
+    },
+    {
+      "term": "e2b",
+      "aliases": [
+        "E2B"
+      ],
+      "summary": "A service that runs isolated cloud sandboxes, used as one of the runners (runners/e2b)."
+    },
+    {
+      "term": "setup script",
+      "summary": "The script a cloud environment runs before the agent starts. It installs tools and must exit zero."
+    }
+  ],
+  "idPattern": "wc-\\d+(?:\\.\\d+)*",
   "cards": [
     {
       "id": "env-docs",
@@ -39,6 +65,67 @@
       "status": "open",
       "created": "2026-09-25T09:10:00Z",
       "source": "coordinator: epic wc-4 is assigned to profile docs, which has no session"
+    },
+    {
+      "id": "release-0-2",
+      "kind": "decision",
+      "title": "Three calls before releasing wordcount 0.2",
+      "why": "The docs worker (wc-4) writes the release notes once these are answered.",
+      "context": [
+        "wc-3.1 (count words) has landed; wc-3.2 (any space separates words) waits on its own card. The release can go out with -w as it is.",
+        "A package registry means one more account for you to hold, and one more place to publish on every release.",
+        "Q3 costs one E2B run of about two minutes, on your key."
+      ],
+      "questions": [
+        {
+          "id": "Q1",
+          "text": "Which version number for the release that adds -w?",
+          "options": [
+            {
+              "key": "a",
+              "label": "0.2.0",
+              "recommended": true
+            },
+            {
+              "key": "b",
+              "label": "1.0.0: call it stable"
+            }
+          ]
+        },
+        {
+          "id": "Q2",
+          "text": "Where can people download it?",
+          "options": [
+            {
+              "key": "a",
+              "label": "The release page only",
+              "recommended": true
+            },
+            {
+              "key": "b",
+              "label": "The release page and a package registry"
+            }
+          ]
+        },
+        {
+          "id": "Q3",
+          "text": "Smoke-test the release in an e2b sandbox before tagging?",
+          "options": [
+            {
+              "key": "a",
+              "label": "Yes, once"
+            },
+            {
+              "key": "b",
+              "label": "No, CI is enough",
+              "recommended": true
+            }
+          ]
+        }
+      ],
+      "status": "open",
+      "created": "2026-09-25T09:20:00Z",
+      "source": "coordinator: release checklist for 0.2"
     },
     {
       "id": "wc-3-unicode",

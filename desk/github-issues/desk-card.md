@@ -41,6 +41,14 @@ labels: decision
 - [ ] **Option A (recommended).** What happens if you pick it.
 - [ ] **Option B.** What happens if you pick it.
 
+## Questions
+
+<!-- For several questions in one card. One line per question: its id, the
+     question, then the options by key, the recommended one marked. -->
+
+- **Q1:** The question? — a) First option (recommended) · b) Second option
+- **Q2:** The next question? — a) First option · b) Second option (recommended)
+
 ## Links
 
 -
@@ -51,6 +59,6 @@ labels: decision
 
 ---
 
-**To answer:** comment with your choice and any note, then add the `answered`
-label. The coordinator acts on it, says what it did in a comment, adds `done`
+**To answer:** comment with one line per question you answer, `Q1 a`, then
+your choice (for Choices) and any note, and add the `answered` label. The coordinator acts on it, says what it did in a comment, adds `done`
 and closes the issue.

@@ -1,0 +1,7 @@
+{
+  "id": "Card One",
+  "kind": "decision",
+  "title": "A title",
+  "why": "Something waits.",
+  "status": "open"
+}

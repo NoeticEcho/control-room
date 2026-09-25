@@ -12,21 +12,34 @@ action the agents have no right to take. Examples of actions:
 |---|---|
 | `title` | The action or the question, in the owner's language |
 | `why` | What waits on it |
-| `context` | What the owner needs to know, and nothing more |
+| `context` | What the owner needs to know, and nothing more: a string (paragraphs split on blank lines) or a list of paragraphs. The owner can quote a paragraph into the answer |
 | `steps` | In order. Nothing the owner has to guess |
 | `texts` | Every script, message or config to paste, **whole**, each with a copy button |
 | `choices` | For a decision: options with the recommended one marked |
+| `questions` | Several questions in one card: `[{id, text, options: [{key, label, recommended?}]}]`. The answer's note gets one line per answered question, `<id> <key>`, then the free text |
 | `links` | Where to look |
 | `answer` | `{choice, note, at}`, written by the owner |
 | `status` | `open` → `answered` (the owner replied) → `done` (the coordinator acted and says what it did in `resolution`) |
 
 Also `id` (used in the owner's answer), `kind` (`decision` or `action`),
-`created` and `source` (where the card came from). The full format is
+`created` and `source` (where the card came from). Next to the cards, the desk
+may carry a `glossary` (`[{term, summary, aliases?}]`) and an `idPattern` for
+tracker ids: the page explains each known term, epic or abbreviation in a
+tooltip, because the owner reads a card cold. The full format is
 [`desk/desk.schema.json`](../desk/desk.schema.json), with an example in
 [`desk/desk.example.json`](../desk/desk.example.json).
 
 **The rule of a card:** the owner never has to fill a gap. If a script is to
 be pasted, the card holds the whole script, not "run such-and-such file".
+
+**A card that does not fit is shown as not fitting.** A desk whose page can
+silently ignore a field is a desk where the owner never sees the
+recommendation. It happened: the coordinator wrote the options as plain
+strings under one name while the page read objects under another, and for
+days every card rendered without its recommended option, and nothing said so.
+So the page checks each card against the schema before rendering it, and a
+card that does not fit appears as malformed, naming the field, with its raw
+JSON.
 
 ## Reminders
 

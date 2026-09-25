@@ -12,12 +12,16 @@
   --muted: #5f5f5a;
   --line: #deded8;
   --accent: #2f5fd0;
+  --accent-soft: #e6ecfb;
   --accent-text: #ffffff;
   --code: #f0f0ec;
   --open: #b25e00;
   --answered: #2f5fd0;
   --done: #2c7a3f;
+  --warn: #9a3412;
   --warn-bg: #fff4dc;
+  --tip-bg: #1c1c1a;
+  --tip-text: #f7f7f5;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -28,12 +32,16 @@
     --muted: #a5a59d;
     --line: #34342f;
     --accent: #7ea2ff;
+    --accent-soft: #232c45;
     --accent-text: #10131c;
     --code: #2a2a27;
     --open: #f0a24a;
     --answered: #7ea2ff;
     --done: #6cc584;
+    --warn: #fdba74;
     --warn-bg: #3a2f14;
+    --tip-bg: #ecece8;
+    --tip-text: #161615;
     color-scheme: dark;
   }
 }
@@ -44,12 +52,16 @@
   --muted: #a5a59d;
   --line: #34342f;
   --accent: #7ea2ff;
+  --accent-soft: #232c45;
   --accent-text: #10131c;
   --code: #2a2a27;
   --open: #f0a24a;
   --answered: #7ea2ff;
   --done: #6cc584;
+  --warn: #fdba74;
   --warn-bg: #3a2f14;
+  --tip-bg: #ecece8;
+  --tip-text: #161615;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -70,11 +82,12 @@ button, .button {
   border-radius: 6px; padding: 6px 12px; cursor: pointer;
 }
 button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible, .pill:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; }
 h2 { font-size: 1.05rem; margin: 28px 0 8px; color: var(--muted); font-weight: 600; }
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-  padding: 16px; margin: 12px 0; overflow-wrap: anywhere;
+  padding: 16px; margin: 12px 0; overflow-wrap: anywhere; min-width: 0;
 }
 .card h3 { margin: 0 0 4px; font-size: 1.15rem; }
 .meta { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: .8rem; color: var(--muted); margin-bottom: 8px; }
@@ -82,8 +95,15 @@ h2 { font-size: 1.05rem; margin: 28px 0 8px; color: var(--muted); font-weight: 6
 .badge.open { color: var(--open); } .badge.answered { color: var(--answered); } .badge.done { color: var(--done); }
 .field { margin: 12px 0 0; }
 .field > .label { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 2px; }
-.field p { margin: 0; white-space: pre-wrap; }
+.field p { margin: 0 0 6px; white-space: pre-wrap; }
 ol, ul { margin: 0; padding-left: 1.4em; }
+.para { position: relative; padding-right: 34px; }
+.para .quote {
+  position: absolute; right: 0; top: -2px; padding: 0 8px; line-height: 1.6;
+  font-size: .95rem; opacity: 0; transition: opacity .1s;
+}
+.para:hover .quote, .quote:focus-visible { opacity: 1; }
+@media (hover: none) { .para .quote { opacity: 1; } }
 .text { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; overflow: hidden; }
 .text-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; background: var(--code); font-size: .85rem; }
 .text-head button { flex-shrink: 0; white-space: nowrap; }
@@ -91,17 +111,49 @@ pre { margin: 0; padding: 12px; overflow-x: auto; background: var(--code); font:
 .text pre { border-top: 1px solid var(--line); }
 .choice { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 6px 0; display: block; }
 .choice.recommended { border-color: var(--accent); }
-.choice .rec { color: var(--accent); font-weight: 600; font-size: .8rem; margin-left: 6px; }
+.rec { color: var(--accent); font-weight: 600; font-size: .8rem; margin-left: 6px; white-space: nowrap; overflow-wrap: normal; }
 .choice .consequence { display: block; color: var(--muted); font-size: .9rem; }
 .choice input { margin-right: 8px; }
+.question { border: 0; padding: 0; margin: 10px 0 0; min-width: 0; }
+.question legend { padding: 0; margin-bottom: 6px; }
+.question .qid { font-weight: 700; margin-right: 6px; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill {
+  display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%; min-width: 0;
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer;
+  background: var(--card);
+}
+.pill input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.pill .key { font-weight: 700; }
+.pill.recommended { border-color: var(--accent); }
+.pill.checked { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.pill.checked .rec { color: var(--accent-text); }
+.pill.static { cursor: default; }
 .picked { color: var(--accent); font-weight: 600; }
+.term {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0;
+  border-radius: 2px; cursor: help; text-decoration: underline dotted; text-underline-offset: 3px;
+}
+#tip {
+  position: fixed; z-index: 10; max-width: min(320px, calc(100vw - 32px));
+  background: var(--tip-bg); color: var(--tip-text); border-radius: 8px; padding: 8px 10px;
+  font-size: .9rem; line-height: 1.4; box-shadow: 0 4px 16px rgba(0,0,0,.25); overflow-wrap: anywhere;
+}
+#tip[hidden] { display: none; }
+#tip strong { display: block; }
 textarea { width: 100%; min-height: 70px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
 .answer-form { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.preview { margin-top: 8px; }
+.preview .label { font-size: .8rem; color: var(--muted); margin-bottom: 2px; }
+.preview pre { border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
 .snippet { margin-top: 10px; }
 .hint { color: var(--muted); font-size: .85rem; margin: 6px 0; }
 a { color: var(--accent); }
 .notice { background: var(--warn-bg); border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
+.malformed { border-color: var(--warn); border-width: 2px; }
+.malformed .problem { color: var(--warn); font-weight: 600; margin: 0 0 4px; }
+.malformed pre { margin-top: 8px; border-radius: 6px; }
 .empty { color: var(--muted); }
 #answers { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); padding: 10px 0; margin-top: 24px; }
 #answers[hidden] { display: none; }
@@ -132,8 +184,14 @@ a { color: var(--accent); }
     </div>
   </section>
 </div>
+<div id="tip" role="tooltip" hidden></div>
 <script>
-/* control-room desk: renders desk.json (see docs/desk.md, desk/desk.schema.json).
+/* control-room desk: renders desk.json (docs/desk.md, desk/desk.schema.json).
+ *
+ * Every node is made with createElement and every text goes in as a text
+ * node or through textContent: nothing from the desk ever becomes HTML.
+ * A card that does not fit the schema's shape is shown as malformed, with its
+ * raw JSON, instead of being dropped or half-rendered.
  * A static page cannot write files, so an answer becomes a JSON snippet to
  * copy and paste to the coordinator, the only writer of the desk. */
 (function (root) {
@@ -144,117 +202,245 @@ a { color: var(--accent); }
     ["answered", "Answered, waiting on the coordinator"],
     ["done", "Done"]
   ];
+  var CARD_FIELDS = ["id", "kind", "title", "why", "context", "steps", "texts", "choices", "questions",
+    "links", "answer", "status", "resolution", "created", "source"];
 
-  function esc(value) {
-    return String(value == null ? "" : value)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  /* ---- the card's shape, as desk.schema.json states it ---- */
+
+  var CARD_ID = /^[a-z0-9][a-z0-9-]*$/;
+  var QUESTION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+  var OPTION_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+  var LINK_URL = /^(https?:\/\/|mailto:)/;
+
+  function isObject(v) { return v !== null && typeof v === "object" && !Array.isArray(v); }
+  function isText(v, min) { return typeof v === "string" && v.length >= (min || 0); }
+
+  /* Returns [{field, message}]; empty when the card fits. */
+  function checkCard(card) {
+    var problems = [];
+    function bad(field, message) { problems.push({ field: field, message: message }); }
+    function onlyKeys(obj, allowed, at) {
+      Object.keys(obj).forEach(function (k) {
+        if (allowed.indexOf(k) < 0) bad(at ? at + "." + k : k, "is not a field the schema knows");
+      });
+    }
+    function list(value, name, each) {
+      if (value === undefined) return;
+      if (!Array.isArray(value)) { bad(name, "must be a list"); return; }
+      value.forEach(function (item, i) { each(item, name + "[" + i + "]"); });
+    }
+    function objectWith(item, at, required, optional) {
+      if (!isObject(item)) { bad(at, "must be an object with " + required.join(", ")); return false; }
+      onlyKeys(item, required.concat(optional), at);
+      required.forEach(function (k) { if (item[k] === undefined) bad(at + "." + k, "is missing"); });
+      return true;
+    }
+
+    if (!isObject(card)) return [{ field: "card", message: "is not an object" }];
+    onlyKeys(card, CARD_FIELDS);
+    ["id", "kind", "title", "why", "status"].forEach(function (k) { if (card[k] === undefined) bad(k, "is missing"); });
+    if (card.id !== undefined && !(isText(card.id) && CARD_ID.test(card.id))) bad("id", "must be lowercase letters, digits and dashes");
+    if (card.kind !== undefined && ["decision", "action"].indexOf(card.kind) < 0) bad("kind", "must be decision or action");
+    ["title", "why"].forEach(function (k) { if (card[k] !== undefined && !isText(card[k], 1)) bad(k, "must be a non-empty string"); });
+    if (card.status !== undefined && ["open", "answered", "done"].indexOf(card.status) < 0) bad("status", "must be open, answered or done");
+    ["resolution", "created", "source"].forEach(function (k) { if (card[k] !== undefined && !isText(card[k])) bad(k, "must be a string"); });
+    if (card.context !== undefined && !isText(card.context)) {
+      if (!Array.isArray(card.context)) bad("context", "must be a string or a list of paragraphs");
+      else card.context.forEach(function (p, i) { if (!isText(p, 1)) bad("context[" + i + "]", "must be a non-empty string"); });
+    }
+    list(card.steps, "steps", function (s, at) { if (!isText(s, 1)) bad(at, "must be a non-empty string"); });
+    list(card.texts, "texts", function (t, at) {
+      if (objectWith(t, at, ["label", "text"], [])) {
+        if (t.label !== undefined && !isText(t.label, 1)) bad(at + ".label", "must be a non-empty string");
+        if (t.text !== undefined && !isText(t.text, 1)) bad(at + ".text", "must be a non-empty string");
+      }
+    });
+    list(card.choices, "choices", function (c, at) {
+      if (objectWith(c, at, ["id", "label"], ["consequence", "recommended"])) {
+        if (c.id !== undefined && !(isText(c.id) && CARD_ID.test(c.id))) bad(at + ".id", "must be lowercase letters, digits and dashes");
+        if (c.label !== undefined && !isText(c.label, 1)) bad(at + ".label", "must be a non-empty string");
+        if (c.consequence !== undefined && !isText(c.consequence)) bad(at + ".consequence", "must be a string");
+        if (c.recommended !== undefined && typeof c.recommended !== "boolean") bad(at + ".recommended", "must be true or false");
+      }
+    });
+    list(card.questions, "questions", function (q, at) {
+      if (objectWith(q, at, ["id", "text", "options"], [])) {
+        if (q.id !== undefined && !(isText(q.id) && QUESTION_ID.test(q.id))) bad(at + ".id", "must be an identifier such as Q1");
+        if (q.text !== undefined && !isText(q.text, 1)) bad(at + ".text", "must be a non-empty string");
+        if (q.options !== undefined) {
+          if (!Array.isArray(q.options) || q.options.length === 0) bad(at + ".options", "must be a non-empty list");
+          else list(q.options, at + ".options", function (o, oat) {
+            if (objectWith(o, oat, ["key", "label"], ["recommended"])) {
+              if (o.key !== undefined && !(isText(o.key) && OPTION_KEY.test(o.key))) bad(oat + ".key", "must be a short key such as a");
+              if (o.label !== undefined && !isText(o.label, 1)) bad(oat + ".label", "must be a non-empty string");
+              if (o.recommended !== undefined && typeof o.recommended !== "boolean") bad(oat + ".recommended", "must be true or false");
+            }
+          });
+        }
+      }
+    });
+    list(card.links, "links", function (l, at) {
+      if (objectWith(l, at, ["label", "url"], [])) {
+        if (l.label !== undefined && !isText(l.label, 1)) bad(at + ".label", "must be a non-empty string");
+        if (l.url !== undefined && !(isText(l.url) && LINK_URL.test(l.url))) bad(at + ".url", "must start with http://, https:// or mailto:");
+      }
+    });
+    if (card.answer !== undefined && objectWith(card.answer, "answer", ["at"], ["choice", "note"])) {
+      ["choice", "note", "at"].forEach(function (k) {
+        if (card.answer[k] !== undefined && !isText(card.answer[k])) bad("answer." + k, "must be a string");
+      });
+    }
+    if ((card.status === "answered" || card.status === "done") && card.answer === undefined) bad("answer", "is required when the status is " + card.status);
+    if (card.status === "done" && card.resolution === undefined) bad("resolution", "is required when the status is done");
+    return problems;
+  }
+
+  /* ---- the glossary ---- */
+
+  var BEFORE = "(?<![\\p{L}\\p{N}_-])";
+  var AFTER = "(?![\\p{L}\\p{N}_])";
+
+  function escapeRegExp(s) { return s.replace(/[\\^$.*+?()[\]{}|\/]/g, "\\$&"); }
+
+  /* Returns {entries, lookup, keyRe, idRe, problems}. */
+  function buildGlossary(desk) {
+    var g = { entries: [], lookup: {}, keyRe: null, idRe: null, problems: [] };
+    var raw = desk && desk.glossary;
+    if (raw !== undefined && !Array.isArray(raw)) { g.problems.push("glossary must be a list"); raw = []; }
+    (raw || []).forEach(function (e, i) {
+      if (!isObject(e) || !isText(e.term, 1) || !isText(e.summary, 1) ||
+          (e.aliases !== undefined && !(Array.isArray(e.aliases) && e.aliases.every(function (a) { return isText(a, 1); })))) {
+        g.problems.push("glossary[" + i + "] needs a term and a summary, and aliases as a list of strings");
+        return;
+      }
+      var index = g.entries.length;
+      g.entries.push({ term: e.term, summary: e.summary });
+      [e.term].concat(e.aliases || []).forEach(function (k) { if (!(k in g.lookup)) g.lookup[k] = index; });
+    });
+    var keys = Object.keys(g.lookup).sort(function (a, b) { return b.length - a.length || (a < b ? -1 : 1); });
+    if (keys.length) g.keyRe = new RegExp(BEFORE + "(?:" + keys.map(escapeRegExp).join("|") + ")" + AFTER, "gu");
+    if (desk && desk.idPattern !== undefined) {
+      try {
+        if (!isText(desk.idPattern, 1)) throw new Error("not a string");
+        g.idRe = new RegExp(BEFORE + "(?:" + desk.idPattern + ")" + AFTER, "gu");
+        if (g.idRe.test("")) throw new Error("matches the empty string");
+      } catch (err) {
+        g.idRe = null;
+        g.problems.push("idPattern is not a usable regular expression: " + err.message);
+      }
+    }
+    return g;
+  }
+
+  /* An id is looked up by itself, then by its parents: wc-3.1 -> wc-3. */
+  function lookupId(g, id) {
+    for (var key = id; key; ) {
+      if (key in g.lookup) return g.lookup[key];
+      var dot = key.lastIndexOf(".");
+      if (dot < 0) return null;
+      key = key.slice(0, dot);
+    }
+    return null;
+  }
+
+  /* Returns [{start, end, index}], left to right, the longest match winning. */
+  function findTerms(text, g) {
+    var found = [];
+    function scan(re, resolve) {
+      if (!re) return;
+      re.lastIndex = 0;
+      for (var m; (m = re.exec(text)); ) {
+        if (m[0] === "") { re.lastIndex++; continue; }
+        var index = resolve(m[0]);
+        if (index !== null) found.push({ start: m.index, end: m.index + m[0].length, index: index });
+      }
+    }
+    scan(g.keyRe, function (s) { return g.lookup[s]; });
+    scan(g.idRe, function (s) { return lookupId(g, s); });
+    found.sort(function (a, b) { return a.start - b.start || (b.end - b.start) - (a.end - a.start); });
+    var out = [], until = 0;
+    found.forEach(function (f) { if (f.start >= until) { out.push(f); until = f.end; } });
+    return out;
+  }
+
+  /* ---- building nodes ---- */
+
+  function append(doc, node, kids) {
+    if (kids === null || kids === undefined || kids === false) return;
+    if (Array.isArray(kids)) { kids.forEach(function (k) { append(doc, node, k); }); return; }
+    node.appendChild(typeof kids === "string" ? doc.createTextNode(kids) : kids);
+  }
+
+  function el(doc, tag, attrs, kids) {
+    var node = doc.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) return;
+      node.setAttribute(k, v === true ? "" : String(v));
+    });
+    append(doc, node, kids);
+    return node;
+  }
+
+  /* Text, with every glossary term in a focusable button. */
+  function withTerms(doc, text, g) {
+    var nodes = [], at = 0;
+    findTerms(text, g).forEach(function (f) {
+      if (f.start > at) nodes.push(text.slice(at, f.start));
+      nodes.push(el(doc, "button", { type: "button", "class": "term", "data-term": f.index }, text.slice(f.start, f.end)));
+      at = f.end;
+    });
+    if (at < text.length) nodes.push(text.slice(at));
+    return nodes;
   }
 
   function safeUrl(url) {
-    return typeof url === "string" && /^(https?:\/\/|mailto:)/i.test(url) ? url : null;
+    return typeof url === "string" && LINK_URL.test(url) ? url : null;
   }
 
-  function field(name, label, inner) {
-    return '<div class="field" data-field="' + name + '"><div class="label">' + esc(label) + "</div>" + inner + "</div>";
+  function field(doc, name, label, kids) {
+    return el(doc, "div", { "class": "field", "data-field": name }, [el(doc, "div", { "class": "label" }, label), kids]);
   }
 
   function when(iso) {
     if (!iso) return "";
     var d = new Date(iso);
-    return isNaN(d) ? esc(iso) : esc(d.toISOString().replace("T", " ").slice(0, 16) + " UTC");
+    return isNaN(d) ? String(iso) : d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
   }
 
-  function renderChoices(card) {
-    var picked = card.answer && card.answer.choice;
-    var items = card.choices.map(function (c) {
-      var input = card.status === "open"
-        ? '<input type="radio" name="choice-' + esc(card.id) + '" value="' + esc(c.id) + '"' + (c.recommended ? " checked" : "") + ">"
-        : "";
-      return '<label class="choice' + (c.recommended ? " recommended" : "") + '" data-choice="' + esc(c.id) + '">' +
-        input + "<strong>" + esc(c.label) + "</strong>" +
-        (c.recommended ? '<span class="rec">recommended</span>' : "") +
-        (picked === c.id ? '<span class="rec picked">chosen</span>' : "") +
-        (c.consequence ? '<span class="consequence">' + esc(c.consequence) + "</span>" : "") +
-        "</label>";
+  function paragraphs(context) {
+    if (Array.isArray(context)) return context.slice();
+    return String(context).split(/\n[ \t]*\n/).map(function (p) { return p.trim(); }).filter(Boolean);
+  }
+
+  /* The line a "↩" button adds to the answer. */
+  var LEADING_ID = /^([\p{L}]+-?\d+(?:\.\d+)*)(?![\p{L}\p{N}_-])/u;
+  function quoteLine(paragraph) {
+    var text = String(paragraph).trim().replace(/\s+/g, " ");
+    var m = LEADING_ID.exec(text);
+    if (m) return m[1] + ": ";
+    var chars = Array.from(text);
+    var quote = chars.length > 80 ? chars.slice(0, 79).join("").trimEnd() + "…" : text;
+    return "“" + quote + "” — ";
+  }
+
+  /* One line per answered question, "<id> <key>", then the free text. */
+  function composeNote(questions, picks, freeText) {
+    var lines = [];
+    (questions || []).forEach(function (q) {
+      if (picks && picks[q.id]) lines.push(q.id + " " + picks[q.id]);
     });
-    return field("choices", "Choices", items.join(""));
+    var free = (freeText || "").trim();
+    if (free) lines.push(free);
+    return lines.join("\n");
   }
 
-  function renderCard(card, index) {
-    var id = card.id || "card-" + index;
-    var status = card.status || "open";
-    var html = '<article class="card" id="card-' + esc(id) + '" data-card="' + esc(id) + '" data-field="card">';
-    html += '<div class="meta">' +
-      '<span class="badge ' + esc(status) + '" data-field="status">' + esc(status) + "</span>" +
-      '<span data-field="kind">' + esc(card.kind || "") + "</span>" +
-      '<span data-field="id">' + esc(id) + "</span>" +
-      (card.created ? '<span data-field="created">opened ' + when(card.created) + "</span>" : "") +
-      (card.source ? '<span data-field="source">from ' + esc(card.source) + "</span>" : "") +
-      "</div>";
-    html += '<h3 data-field="title">' + esc(card.title) + "</h3>";
-    html += field("why", "Why it waits", "<p>" + esc(card.why) + "</p>");
-    if (card.context) html += field("context", "Context", "<p>" + esc(card.context) + "</p>");
-    if (card.steps && card.steps.length) {
-      html += field("steps", "Steps", "<ol>" + card.steps.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + "</ol>");
-    }
-    if (card.texts && card.texts.length) {
-      html += field("texts", "Texts to paste, whole", card.texts.map(function (t, j) {
-        return '<div class="text"><div class="text-head"><span>' + esc(t.label) + "</span>" +
-          '<button type="button" data-action="copy" data-copy="text-' + esc(id) + "-" + j + '">Copy</button></div>' +
-          '<pre id="text-' + esc(id) + "-" + j + '">' + esc(t.text) + "</pre></div>";
-      }).join(""));
-    }
-    if (card.choices && card.choices.length) html += renderChoices(card);
-    if (card.links && card.links.length) {
-      html += field("links", "Links", "<ul>" + card.links.map(function (l) {
-        var url = safeUrl(l.url);
-        return "<li>" + (url
-          ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(l.label) + "</a>"
-          : esc(l.label) + " (link refused: " + esc(l.url) + ")") + "</li>";
-      }).join("") + "</ul>");
-    }
-    if (card.answer) {
-      html += field("answer", "Answer, " + when(card.answer.at),
-        (card.answer.choice ? '<p>Chose <strong>' + esc(card.answer.choice) + "</strong></p>" : "") +
-        (card.answer.note ? "<p>" + esc(card.answer.note) + "</p>" : ""));
-    }
-    if (card.resolution) html += field("resolution", "What the coordinator did", "<p>" + esc(card.resolution) + "</p>");
-    if (status === "open") {
-      html += '<div class="answer-form" data-field="answer-form">' +
-        '<label for="note-' + esc(id) + '"><strong>Your answer</strong>' +
-        (card.choices && card.choices.length ? " (pick above, add a note if you like)" : "") + "</label>" +
-        '<textarea id="note-' + esc(id) + '" placeholder="A note for the coordinator"></textarea>' +
-        '<div class="row"><button type="button" class="primary" data-action="answer" data-card="' + esc(id) + '">Prepare the answer</button></div>' +
-        '<div class="snippet" id="snippet-' + esc(id) + '"></div></div>';
-    }
-    return html + "</article>";
-  }
-
-  /* Returns {html, count, problems}. Pure: no DOM, so it can be tested. */
-  function renderDesk(data) {
-    if (!data || !Array.isArray(data.cards)) throw new Error("not a desk: expected an object with a \"cards\" array");
-    var problems = [];
-    var groups = {};
-    data.cards.forEach(function (card, i) {
-      ["id", "kind", "title", "why", "status"].forEach(function (key) {
-        if (card[key] == null || card[key] === "") problems.push("card " + (card.id || i) + " has no " + key);
-      });
-      var s = card.status || "open";
-      (groups[s] = groups[s] || []).push(renderCard(card, i));
-    });
-    var html = "";
-    var known = STATUSES.map(function (s) { return s[0]; });
-    STATUSES.concat(Object.keys(groups).filter(function (s) { return known.indexOf(s) < 0; })
-      .map(function (s) { return [s, "Status " + s]; }))
-      .forEach(function (s) {
-        var cards = groups[s[0]] || [];
-        html += '<section data-status="' + esc(s[0]) + '"><h2>' + esc(s[1]) + " (" + cards.length + ")</h2>" +
-          (cards.length ? cards.join("") : '<p class="empty">None.</p>') + "</section>";
-      });
-    var counts = {};
-    data.cards.forEach(function (c) { counts[c.status || "open"] = (counts[c.status || "open"] || 0) + 1; });
-    return { html: html, count: data.cards.length, counts: counts, problems: problems };
+  function draftAnswer(card, picks, choice, freeText) {
+    var answer = {};
+    if (choice) answer.choice = choice;
+    var note = composeNote(card.questions, picks, freeText);
+    if (note) answer.note = note;
+    return answer;
   }
 
   function answerSnippet(cardId, choice, note, at) {
@@ -265,16 +451,173 @@ a { color: var(--accent); }
     return { card: cardId, status: "answered", answer: answer };
   }
 
-  root.ControlRoomDesk = { renderDesk: renderDesk, renderCard: renderCard, answerSnippet: answerSnippet, esc: esc, safeUrl: safeUrl };
+  function renderMalformed(doc, card, problems, index) {
+    var raw;
+    try { raw = JSON.stringify(card, null, 2); } catch (e) { raw = String(card); }
+    var title = isObject(card) && isText(card.title, 1) ? card.title : null;
+    return el(doc, "article", { "class": "card malformed", "data-malformed": "", "data-card": isObject(card) && isText(card.id) ? card.id : "card-" + index }, [
+      problems.map(function (p) {
+        return el(doc, "p", { "class": "problem" }, ["This card is malformed: ", el(doc, "code", {}, p.field), " " + p.message]);
+      }),
+      title ? el(doc, "p", {}, ["Title as written: ", title]) : null,
+      el(doc, "p", { "class": "hint" }, "The page does not guess at a card it cannot read. Tell the coordinator; its raw JSON follows."),
+      el(doc, "pre", {}, raw)
+    ]);
+  }
+
+  function renderCard(doc, card, index, g) {
+    var id = card.id;
+    var status = card.status;
+    var open = status === "open";
+    var t = function (s) { return withTerms(doc, String(s), g); };
+    var picked = card.answer && card.answer.choice;
+    var kids = [];
+
+    kids.push(el(doc, "div", { "class": "meta" }, [
+      el(doc, "span", { "class": "badge " + status, "data-field": "status" }, status),
+      el(doc, "span", { "data-field": "kind" }, card.kind),
+      el(doc, "span", { "data-field": "id", "class": "mono" }, id),
+      card.created ? el(doc, "span", { "data-field": "created" }, "opened " + when(card.created)) : null,
+      card.source ? el(doc, "span", { "data-field": "source" }, "from " + card.source) : null
+    ]));
+    kids.push(el(doc, "h3", { "data-field": "title" }, t(card.title)));
+    kids.push(field(doc, "why", "Why it waits", el(doc, "p", {}, t(card.why))));
+
+    if (card.context !== undefined && paragraphs(card.context).length) {
+      kids.push(field(doc, "context", "Context", paragraphs(card.context).map(function (p, i) {
+        return el(doc, "p", { "class": open ? "para" : null }, [
+          t(p),
+          open ? el(doc, "button", { type: "button", "class": "quote", "data-action": "quote", "data-card": id, "data-para": i,
+            "aria-label": "Quote into the answer", title: "Quote into the answer" }, "↩") : null
+        ]);
+      })));
+    }
+    if (card.steps && card.steps.length) {
+      kids.push(field(doc, "steps", "Steps", el(doc, "ol", {}, card.steps.map(function (s) { return el(doc, "li", {}, t(s)); }))));
+    }
+    if (card.texts && card.texts.length) {
+      kids.push(field(doc, "texts", "Texts to paste, whole", card.texts.map(function (x, j) {
+        var pid = "text-" + id + "-" + j;
+        return el(doc, "div", { "class": "text" }, [
+          el(doc, "div", { "class": "text-head" }, [
+            el(doc, "span", {}, x.label),
+            el(doc, "button", { type: "button", "data-action": "copy", "data-copy": pid }, "Copy")
+          ]),
+          el(doc, "pre", { id: pid }, x.text)
+        ]);
+      })));
+    }
+    if (card.choices && card.choices.length) {
+      kids.push(field(doc, "choices", "Choices", card.choices.map(function (c) {
+        return el(doc, "label", { "class": "choice" + (c.recommended ? " recommended" : ""), "data-choice": c.id }, [
+          open ? el(doc, "input", { type: "radio", name: "choice-" + id, value: c.id, checked: !!c.recommended }) : null,
+          el(doc, "strong", {}, t(c.label)),
+          c.recommended ? el(doc, "span", { "class": "rec" }, "recommended") : null,
+          picked === c.id ? el(doc, "span", { "class": "rec picked" }, "chosen") : null,
+          c.consequence ? el(doc, "span", { "class": "consequence" }, t(c.consequence)) : null
+        ]);
+      })));
+    }
+    if (card.questions && card.questions.length) {
+      kids.push(field(doc, "questions", "Questions", card.questions.map(function (q) {
+        return el(doc, "fieldset", { "class": "question", "data-question": q.id }, [
+          el(doc, "legend", {}, [el(doc, "span", { "class": "qid mono" }, q.id), t(q.text)]),
+          el(doc, "div", { "class": "pills" }, q.options.map(function (o) {
+            return el(doc, "label", { "class": "pill" + (o.recommended ? " recommended" : "") + (open ? "" : " static"), "data-option": o.key }, [
+              open ? el(doc, "input", { type: "radio", name: "q-" + id + "-" + q.id, value: o.key, "data-question": q.id }) : null,
+              el(doc, "span", { "class": "key mono" }, o.key),
+              el(doc, "span", {}, t(o.label)),
+              o.recommended ? el(doc, "span", { "class": "rec" }, "recommended") : null
+            ]);
+          }))
+        ]);
+      })));
+    }
+    if (card.links && card.links.length) {
+      kids.push(field(doc, "links", "Links", el(doc, "ul", {}, card.links.map(function (l) {
+        var url = safeUrl(l.url);
+        return el(doc, "li", {}, url
+          ? el(doc, "a", { href: url, target: "_blank", rel: "noopener noreferrer" }, l.label)
+          : [l.label, " (link refused: ", String(l.url), ")"]);
+      }))));
+    }
+    if (card.answer) {
+      kids.push(field(doc, "answer", "Answer, " + when(card.answer.at), [
+        card.answer.choice ? el(doc, "p", {}, ["Chose ", el(doc, "strong", {}, card.answer.choice)]) : null,
+        card.answer.note ? el(doc, "p", {}, card.answer.note) : null
+      ]));
+    }
+    if (card.resolution) kids.push(field(doc, "resolution", "What the coordinator did", el(doc, "p", {}, card.resolution)));
+    if (open) {
+      var draft = draftAnswer(card, {}, (card.choices || []).filter(function (c) { return c.recommended; }).map(function (c) { return c.id; })[0], "");
+      kids.push(el(doc, "div", { "class": "answer-form", "data-field": "answer-form" }, [
+        el(doc, "label", { "for": "note-" + id }, el(doc, "strong", {}, "Your answer")),
+        el(doc, "textarea", { id: "note-" + id, "data-card": id, placeholder: "A note for the coordinator" }),
+        el(doc, "div", { "class": "preview" }, [
+          el(doc, "div", { "class": "label" }, "This goes to the coordinator:"),
+          el(doc, "pre", { id: "preview-" + id, "data-preview": id }, previewText(id, draft))
+        ]),
+        el(doc, "div", { "class": "row" }, el(doc, "button", { type: "button", "class": "primary", "data-action": "answer", "data-card": id }, "Prepare the answer")),
+        el(doc, "div", { "class": "snippet", id: "snippet-" + id })
+      ]));
+    }
+    return el(doc, "article", { "class": "card", id: "card-" + id, "data-card": id }, kids);
+  }
+
+  /* The tooltip's content: the term in bold, then the summary. Text only. */
+  function tipContent(doc, entry) {
+    return [el(doc, "strong", {}, entry.term), doc.createTextNode(entry.summary)];
+  }
+
+  function previewText(id, answer) {
+    return JSON.stringify({ card: id, status: "answered", answer: answer }, null, 2);
+  }
+
+  /* Returns {node, count, counts, malformed, problems, glossary}. Uses only
+   * doc.createElement, doc.createTextNode, setAttribute and appendChild. */
+  function renderDesk(data, doc) {
+    if (!isObject(data) || !Array.isArray(data.cards)) throw new Error("not a desk: expected an object with a \"cards\" array");
+    var g = buildGlossary(data);
+    var groups = {}, malformed = [], counts = {};
+    data.cards.forEach(function (card, i) {
+      var problems = checkCard(card);
+      if (problems.length) { malformed.push(renderMalformed(doc, card, problems, i)); return; }
+      (groups[card.status] = groups[card.status] || []).push(renderCard(doc, card, i, g));
+      counts[card.status] = (counts[card.status] || 0) + 1;
+    });
+    var node = el(doc, "div", { "class": "desk" }, [
+      malformed.length ? el(doc, "section", { "data-status": "malformed" }, [
+        el(doc, "h2", {}, "Malformed: not shown as cards (" + malformed.length + ")"), malformed]) : null,
+      STATUSES.map(function (s) {
+        var cards = groups[s[0]] || [];
+        return el(doc, "section", { "data-status": s[0] }, [
+          el(doc, "h2", {}, s[1] + " (" + cards.length + ")"),
+          cards.length ? cards : el(doc, "p", { "class": "empty" }, "None.")
+        ]);
+      })
+    ]);
+    return { node: node, count: data.cards.length, counts: counts, malformed: malformed.length, problems: g.problems, glossary: g };
+  }
+
+  root.ControlRoomDesk = {
+    checkCard: checkCard, buildGlossary: buildGlossary, findTerms: findTerms, withTerms: withTerms,
+    quoteLine: quoteLine, composeNote: composeNote, draftAnswer: draftAnswer, answerSnippet: answerSnippet,
+    paragraphs: paragraphs, renderDesk: renderDesk, safeUrl: safeUrl, tipContent: tipContent, CARD_FIELDS: CARD_FIELDS
+  };
 
   if (typeof document === "undefined") return;
 
   /* ---- the page ---- */
+  var desk = null, glossary = null;
   var answers = {};
   var deskEl = document.getElementById("desk");
   var noticeEl = document.getElementById("notice");
+  var tip = document.getElementById("tip");
 
-  function notice(html) { noticeEl.innerHTML = html ? '<div class="notice">' + html + "</div>" : ""; }
+  function notice(text) {
+    noticeEl.textContent = "";
+    if (text) noticeEl.appendChild(el(document, "div", { "class": "notice" }, text));
+  }
 
   function copy(text, button) {
     function done(ok) {
@@ -303,19 +646,44 @@ a { color: var(--accent); }
     return ok;
   }
 
+  function cardData(id) {
+    return desk.cards.filter(function (c) { return isObject(c) && c.id === id; })[0];
+  }
+
+  function cardEl(id) { return document.querySelector('.card[data-card="' + CSS.escape(id) + '"]:not([data-malformed])'); }
+
+  function readAnswer(id) {
+    var node = cardEl(id), card = cardData(id), picks = {};
+    node.querySelectorAll('input[type="radio"][data-question]:checked').forEach(function (r) { picks[r.dataset.question] = r.value; });
+    var choice = node.querySelector('input[type="radio"][name="choice-' + CSS.escape(id) + '"]:checked');
+    return draftAnswer(card, picks, choice && choice.value, node.querySelector("textarea").value);
+  }
+
+  function updatePreview(id) {
+    var pre = document.getElementById("preview-" + id);
+    if (pre) pre.textContent = previewText(id, readAnswer(id));
+  }
+
   function show(data, from) {
     var result;
-    try { result = renderDesk(data); } catch (e) {
-      deskEl.innerHTML = "";
+    hideTip();
+    try { result = renderDesk(data, document); } catch (e) {
+      deskEl.textContent = "";
       document.getElementById("summary").textContent = "No desk loaded";
-      notice(esc(from) + ": " + esc(e.message));
+      notice(from + ": " + e.message);
       return;
     }
-    deskEl.innerHTML = result.html;
+    desk = data;
+    glossary = result.glossary;
+    deskEl.textContent = "";
+    deskEl.appendChild(result.node);
     var c = result.counts;
     document.getElementById("summary").textContent =
-      (c.open || 0) + " waiting on you · " + (c.answered || 0) + " answered · " + (c.done || 0) + " done — " + from;
-    notice(result.problems.length ? "This desk has problems: " + result.problems.map(esc).join("; ") : "");
+      (c.open || 0) + " waiting on you · " + (c.answered || 0) + " answered · " + (c.done || 0) + " done" +
+      (result.malformed ? " · " + result.malformed + " malformed" : "") + " — " + from;
+    var problems = result.problems.slice();
+    if (result.malformed) problems.unshift(result.malformed + (result.malformed === 1 ? " card does" : " cards do") + " not fit the schema: see the top of the page.");
+    notice(problems.join(" "));
     answers = {};
     updateAnswers();
   }
@@ -329,24 +697,50 @@ a { color: var(--accent); }
   deskEl.addEventListener("click", function (event) {
     var button = event.target.closest("button[data-action]");
     if (!button) return;
+    var id = button.dataset.card;
     if (button.dataset.action === "copy") {
       var pre = document.getElementById(button.dataset.copy);
       if (pre) copy(pre.textContent, button);
+    } else if (button.dataset.action === "quote") {
+      var card = cardData(id);
+      var area = cardEl(id).querySelector("textarea");
+      var line = quoteLine(paragraphs(card.context)[Number(button.dataset.para)]);
+      area.value += (area.value && !/\n$/.test(area.value) ? "\n" : "") + line;
+      area.focus();
+      area.setSelectionRange(area.value.length, area.value.length);
+      updatePreview(id);
     } else if (button.dataset.action === "answer") {
-      var id = button.dataset.card;
-      var card = document.querySelector('[data-card="' + CSS.escape(id) + '"]');
-      var picked = card.querySelector('input[type="radio"]:checked');
-      var note = card.querySelector("textarea").value.trim();
-      if (!picked && !note) { notice("Pick a choice or write a note before preparing an answer."); return; }
+      var answer = readAnswer(id);
+      if (!answer.choice && !answer.note) { notice("Pick an option or write a note before preparing an answer."); return; }
       notice("");
-      var snippet = answerSnippet(id, picked && picked.value, note, new Date().toISOString());
+      var snippet = answerSnippet(id, answer.choice, answer.note, new Date().toISOString());
       answers[id] = snippet;
       var out = document.getElementById("snippet-" + id);
-      out.innerHTML = '<div class="text"><div class="text-head"><span>Paste this to the coordinator</span>' +
-        '<button type="button" data-action="copy" data-copy="answer-' + esc(id) + '">Copy</button></div>' +
-        '<pre id="answer-' + esc(id) + '">' + esc(JSON.stringify(snippet, null, 2)) + "</pre></div>";
+      out.textContent = "";
+      out.appendChild(el(document, "div", { "class": "text" }, [
+        el(document, "div", { "class": "text-head" }, [
+          el(document, "span", {}, "Paste this to the coordinator"),
+          el(document, "button", { type: "button", "data-action": "copy", "data-copy": "answer-" + id }, "Copy")
+        ]),
+        el(document, "pre", { id: "answer-" + id }, JSON.stringify(snippet, null, 2))
+      ]));
       updateAnswers();
     }
+  });
+
+  deskEl.addEventListener("change", function (event) {
+    var input = event.target;
+    if (input.type === "radio") {
+      document.querySelectorAll('input[name="' + CSS.escape(input.name) + '"]').forEach(function (r) {
+        var pill = r.closest(".pill");
+        if (pill) pill.classList.toggle("checked", r.checked);
+      });
+    }
+    var card = input.closest(".card");
+    if (card) updatePreview(card.dataset.card);
+  });
+  deskEl.addEventListener("input", function (event) {
+    if (event.target.tagName === "TEXTAREA") updatePreview(event.target.dataset.card);
   });
 
   document.querySelector('[data-action="copy-all"]').addEventListener("click", function (event) {
@@ -354,10 +748,60 @@ a { color: var(--accent); }
     copy(JSON.stringify({ answers: list }, null, 2), event.currentTarget);
   });
 
+  /* ---- the tooltip: one for the page, text only ---- */
+  var tipFor = null, tipPinned = false, tipAt = null;
+  function showTip(term, pin) {
+    var entry = glossary && glossary.entries[Number(term.dataset.term)];
+    if (!entry) return;
+    tip.textContent = "";
+    tipContent(document, entry).forEach(function (n) { tip.appendChild(n); });
+    tip.hidden = false;
+    if (tipFor && tipFor !== term) tipFor.removeAttribute("aria-describedby");
+    tipFor = term;
+    tipPinned = !!pin;
+    term.setAttribute("aria-describedby", "tip");
+    var r = term.getBoundingClientRect();
+    tipAt = { top: r.top, left: r.left };
+    var w = tip.offsetWidth, h = tip.offsetHeight;
+    var left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+    var top = r.bottom + 6 + h > window.innerHeight && r.top - 6 - h > 0 ? r.top - 6 - h : r.bottom + 6;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+  function hideTip() {
+    tip.hidden = true;
+    if (tipFor) tipFor.removeAttribute("aria-describedby");
+    tipFor = null;
+    tipPinned = false;
+  }
+  function termOf(target) { return target && target.closest ? target.closest("button.term") : null; }
+  document.addEventListener("mouseover", function (e) { var t = termOf(e.target); if (t && !tipPinned) showTip(t, false); });
+  document.addEventListener("mouseout", function (e) { if (termOf(e.target) && !tipPinned) hideTip(); });
+  document.addEventListener("focusin", function (e) { var t = termOf(e.target); if (t) showTip(t, tipPinned && tipFor === t); });
+  document.addEventListener("focusout", function (e) { if (termOf(e.target) && !tipPinned) hideTip(); });
+  document.addEventListener("click", function (e) {
+    var t = termOf(e.target);
+    if (t) {
+      e.preventDefault();
+      if (tipPinned && tipFor === t) hideTip(); else showTip(t, true);
+    } else if (tipPinned && !tip.contains(e.target)) {
+      hideTip();
+    }
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideTip(); });
+  /* Scrolling closes it once the term has moved: focusing a button can fire
+   * a scroll event that moves nothing. */
+  window.addEventListener("scroll", function () {
+    if (!tipFor) return;
+    var r = tipFor.getBoundingClientRect();
+    if (Math.abs(r.top - tipAt.top) > 4 || Math.abs(r.left - tipAt.left) > 4) hideTip();
+  }, { passive: true, capture: true });
+  window.addEventListener("resize", hideTip);
+
   function readFile(file) {
     var reader = new FileReader();
     reader.onload = function () {
-      try { show(JSON.parse(reader.result), file.name); } catch (e) { notice(esc(file.name) + " is not JSON: " + esc(e.message)); }
+      try { show(JSON.parse(reader.result), file.name); } catch (e) { notice(file.name + " is not JSON: " + e.message); }
     };
     reader.readAsText(file);
   }
@@ -395,9 +839,11 @@ a { color: var(--accent); }
     (function next(i) {
       if (i >= candidates.length) {
         document.getElementById("summary").textContent = "No desk loaded";
-        deskEl.innerHTML = '<div class="drop">This page cannot read files by itself here' +
-          (location.protocol === "file:" ? " (opened from disk)" : "") +
-          '. Choose <strong>Open a desk file</strong> and pick <code>desk.json</code>, or drop it on the page.</div>';
+        deskEl.textContent = "";
+        deskEl.appendChild(el(document, "div", { "class": "drop" }, [
+          "This page cannot read files by itself here" + (location.protocol === "file:" ? " (opened from disk)" : "") + ". Choose ",
+          el(document, "strong", {}, "Open a desk file"), " and pick ", el(document, "code", {}, "desk.json"), ", or drop it on the page."
+        ]));
         return;
       }
       fetch(candidates[i], { cache: "no-store" })

@@ -1,0 +1,7 @@
+{
+  "id": "c",
+  "kind": "decision",
+  "title": "A title",
+  "why": "Something waits.",
+  "status": "pending"
+}

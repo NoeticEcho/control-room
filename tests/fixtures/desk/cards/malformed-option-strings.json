@@ -1,0 +1,17 @@
+{
+  "id": "c",
+  "kind": "decision",
+  "title": "A title",
+  "why": "Something waits.",
+  "status": "open",
+  "questions": [
+    {
+      "id": "Q1",
+      "text": "Which?",
+      "options": [
+        "a",
+        "b"
+      ]
+    }
+  ]
+}

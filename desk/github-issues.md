@@ -31,6 +31,8 @@ source. Two things to keep:
   on each block, which is what the static page's copy buttons are for.
 - **Choices as a list with the recommended one marked**, each with what
   happens if the owner picks it.
+- **Several questions as a Questions block**, one line each:
+  `Q1: The question? — a) … (recommended) · b) …`.
 
 The coordinator creates cards with `gh issue create --label decision
 --title … --body-file card.md` (or its GitHub tools), never by asking the
@@ -38,8 +40,17 @@ owner to fill the template.
 
 ## Answers
 
-The owner answers in a comment ("B. And keep the old data for a month.") and
-adds `answered`. The coordinator reads the comments since the card was
+The owner answers in a comment and adds `answered`. For a card with
+questions, the comment has one line per answered question, the id then the
+option's key, and then any note, as the static page composes it:
+
+    Q1 a
+    Q3 b
+    And keep the old data for a month.
+
+`gh-desk` prints the answered card's last comment as written, each line behind
+`    > `: it does not parse, reflow or quote it, so what the coordinator reads
+is what the owner typed. The coordinator reads the comments since the card was
 created, applies the answer **within the question asked**, comments with what
 it did, adds `done` and closes the issue.
 
@@ -57,6 +68,9 @@ owner, oldest first, then one line to tell the owner:
 
     Answered: act on these (1):
       #12 decision	Pick the retention period	(open 3h, 3 comments) https://github.com/…/issues/12
+        answer, the last comment as written:
+        > Q1 b
+        > And keep the old data for a month.
     Waiting on the owner (2):
       #14 action	Create the docs environment	(open 26h, 1 comment) https://github.com/…/issues/14
       #15 decision	Licence of the sample text	(open 2h, 0 comments) https://github.com/…/issues/15

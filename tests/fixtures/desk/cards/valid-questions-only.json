@@ -1,0 +1,19 @@
+{
+  "id": "c",
+  "kind": "decision",
+  "title": "A title",
+  "why": "Something waits.",
+  "status": "open",
+  "questions": [
+    {
+      "id": "H1.2",
+      "text": "Keep?",
+      "options": [
+        {
+          "key": "yes",
+          "label": "Keep"
+        }
+      ]
+    }
+  ]
+}
