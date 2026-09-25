@@ -1,0 +1,11 @@
+{
+  "id": "c",
+  "kind": "decision",
+  "title": "A title",
+  "why": "Something waits.",
+  "status": "answered",
+  "answer": {
+    "at": "2026-09-25T09:00:00Z",
+    "by": "someone"
+  }
+}

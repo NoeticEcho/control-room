@@ -1,0 +1,59 @@
+{
+  "id": "c",
+  "kind": "decision",
+  "title": "A title",
+  "why": "Something waits.",
+  "status": "open",
+  "context": "First paragraph.\n\nQ2: second one.",
+  "steps": [
+    "one",
+    "two"
+  ],
+  "texts": [
+    {
+      "label": "Script",
+      "text": "echo hi\n"
+    }
+  ],
+  "choices": [
+    {
+      "id": "a",
+      "label": "A",
+      "consequence": "then this",
+      "recommended": true
+    },
+    {
+      "id": "b",
+      "label": "B"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q1",
+      "text": "Which?",
+      "options": [
+        {
+          "key": "a",
+          "label": "x",
+          "recommended": true
+        },
+        {
+          "key": "b",
+          "label": "y"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "label": "Docs",
+      "url": "https://example.invalid/"
+    },
+    {
+      "label": "Mail",
+      "url": "mailto:owner@example.invalid"
+    }
+  ],
+  "created": "2026-09-25T09:00:00Z",
+  "source": "handoff x"
+}

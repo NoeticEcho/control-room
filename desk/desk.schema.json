@@ -2,12 +2,16 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/NoeticEcho/control-room/desk/desk.schema.json",
   "title": "control-room desk",
-  "description": "The decision desk (docs/desk.md): one queue of cards, each holding only what the owner can do. The coordinator is the only writer of this file; the owner answers in desk/index.html, which gives the answer back as a JSON snippet for the coordinator to apply.",
+  "description": "The decision desk (docs/desk.md): one queue of cards, each holding only what the owner can do. The coordinator is the only writer of this file; the owner answers in desk/index.html, which gives the answer back as a JSON snippet for the coordinator to apply. A card whose shape does not fit this schema is shown by the page as malformed, with its raw JSON, never silently dropped or half-rendered.",
   "type": "object",
-  "required": ["cards"],
+  "required": [
+    "cards"
+  ],
   "additionalProperties": false,
   "properties": {
-    "$schema": {"type": "string"},
+    "$schema": {
+      "type": "string"
+    },
     "updated": {
       "type": "string",
       "format": "date-time",
@@ -15,13 +19,57 @@
     },
     "cards": {
       "type": "array",
-      "items": {"$ref": "#/definitions/card"}
+      "items": {
+        "$ref": "#/definitions/card"
+      }
+    },
+    "glossary": {
+      "type": "array",
+      "description": "Terms, epics and abbreviations the page explains in a tooltip wherever they appear in a card's title, why, context, steps, choices and questions.",
+      "items": {
+        "type": "object",
+        "required": [
+          "term",
+          "summary"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "term": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Shown as text, never as HTML."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Other spellings that resolve to this term."
+          }
+        }
+      }
+    },
+    "idPattern": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A regular expression source (JavaScript, `u` flag) for tracker ids. A matching id is looked up in the glossary by itself, then by its parents (`wc-3.1` → `wc-3`)."
     }
   },
   "definitions": {
     "card": {
       "type": "object",
-      "required": ["id", "kind", "title", "why", "status"],
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "why",
+        "status"
+      ],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -31,7 +79,10 @@
         },
         "kind": {
           "type": "string",
-          "enum": ["decision", "action"],
+          "enum": [
+            "decision",
+            "action"
+          ],
           "description": "`decision`: the owner chooses. `action`: the owner does something the agents have no right to do."
         },
         "title": {
@@ -45,12 +96,26 @@
           "description": "What waits on it."
         },
         "context": {
-          "type": "string",
-          "description": "What the owner needs to know, and nothing more."
+          "description": "What the owner needs to know, and nothing more. A string, split into paragraphs on blank lines, or an array of paragraphs.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ]
         },
         "steps": {
           "type": "array",
-          "items": {"type": "string", "minLength": 1},
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "description": "In order. Nothing the owner has to guess."
         },
         "texts": {
@@ -58,11 +123,20 @@
           "description": "Every script, message or config to paste, whole, each shown with a copy button.",
           "items": {
             "type": "object",
-            "required": ["label", "text"],
+            "required": [
+              "label",
+              "text"
+            ],
             "additionalProperties": false,
             "properties": {
-              "label": {"type": "string", "minLength": 1},
-              "text": {"type": "string", "minLength": 1}
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
@@ -71,13 +145,75 @@
           "description": "For a decision: the options, with the recommended one marked.",
           "items": {
             "type": "object",
-            "required": ["id", "label"],
+            "required": [
+              "id",
+              "label"
+            ],
             "additionalProperties": false,
             "properties": {
-              "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
-              "label": {"type": "string", "minLength": 1},
-              "consequence": {"type": "string", "description": "What happens if the owner picks it."},
-              "recommended": {"type": "boolean"}
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "consequence": {
+                "type": "string",
+                "description": "What happens if the owner picks it."
+              },
+              "recommended": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "questions": {
+          "type": "array",
+          "description": "Several questions in one card, each answered by picking one option. The page composes the answer's note as one line per answered question, `<id> <key>`, then the owner's free text. `choices` stays for a single choice; a card may have both.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "text",
+              "options"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "options": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "key",
+                    "label"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "recommended": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -86,35 +222,60 @@
           "description": "Where to look.",
           "items": {
             "type": "object",
-            "required": ["label", "url"],
+            "required": [
+              "label",
+              "url"
+            ],
             "additionalProperties": false,
             "properties": {
-              "label": {"type": "string", "minLength": 1},
-              "url": {"type": "string", "pattern": "^(https?://|mailto:)"}
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "url": {
+                "type": "string",
+                "pattern": "^(https?://|mailto:)"
+              }
             }
           }
         },
         "answer": {
           "type": "object",
           "description": "Written by the owner (through the coordinator, who applies the snippet the page gives).",
-          "required": ["at"],
+          "required": [
+            "at"
+          ],
           "additionalProperties": false,
           "properties": {
-            "choice": {"type": "string"},
-            "note": {"type": "string"},
-            "at": {"type": "string", "format": "date-time"}
+            "choice": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         },
         "status": {
           "type": "string",
-          "enum": ["open", "answered", "done"],
+          "enum": [
+            "open",
+            "answered",
+            "done"
+          ],
           "description": "`open` → `answered` (the owner replied) → `done` (the coordinator acted, and says what it did in `resolution`)."
         },
         "resolution": {
           "type": "string",
           "description": "For `done`: what the coordinator did with the answer."
         },
-        "created": {"type": "string", "format": "date-time"},
+        "created": {
+          "type": "string",
+          "format": "date-time"
+        },
         "source": {
           "type": "string",
           "description": "Where the card came from: an epic's handoff question, a task assigned to the owner."
@@ -122,12 +283,35 @@
       },
       "allOf": [
         {
-          "if": {"properties": {"status": {"enum": ["answered", "done"]}}},
-          "then": {"required": ["answer"]}
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "answered",
+                  "done"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "answer"
+            ]
+          }
         },
         {
-          "if": {"properties": {"status": {"const": "done"}}},
-          "then": {"required": ["resolution"]}
+          "if": {
+            "properties": {
+              "status": {
+                "const": "done"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "resolution"
+            ]
+          }
         }
       ]
     }

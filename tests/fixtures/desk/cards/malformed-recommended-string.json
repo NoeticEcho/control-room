@@ -1,0 +1,14 @@
+{
+  "id": "c",
+  "kind": "decision",
+  "title": "A title",
+  "why": "Something waits.",
+  "status": "open",
+  "choices": [
+    {
+      "id": "a",
+      "label": "A",
+      "recommended": "yes"
+    }
+  ]
+}
