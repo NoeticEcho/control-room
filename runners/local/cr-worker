@@ -8,6 +8,8 @@
 #                                           with the opening message
 #   cr-worker brief <profile> <brief.md>    deliver a brief (or a question) as
 #                                           a user message to that session
+#   cr-worker status <profile>              the worker's epic, branch, whether
+#                                           it is in a turn, and its last line
 #   cr-worker path <profile>                print the worktree's path
 #   cr-worker env <profile>                 print the worker's environment, to
 #                                           eval in a shell of your own
@@ -29,6 +31,8 @@
 # and each `brief` runs
 #   claude -p <brief> --resume <uuid>
 # in the worktree, so every brief is a user message in the same conversation.
+# One turn at a time: `start` or `brief` while the worker is still in a turn
+# exits 75 and sends nothing.
 #
 # Dependencies: POSIX sh, git, jq (for control-room.json).
 
@@ -42,7 +46,7 @@ die() {
 }
 
 usage() {
-	sed -n '4,15p' "$0" | sed 's/^# \{0,1\}//' >&2
+	sed -n '4,17p' "$0" | sed 's/^# \{0,1\}//' >&2
 	exit 2
 }
 
@@ -124,9 +128,41 @@ replace() {
 	printf '%s' "$out$text"
 }
 
+# take_turn: one turn at a time per worker. A second message while the agent
+# is still answering the first would resume the same session twice at once.
+# The marker is a directory (mkdir is atomic) holding cr-worker's pid; one
+# whose process is gone is stale and taken over.
+take_turn() {
+	turn=$state/turn
+	if mkdir "$turn" 2>/dev/null; then
+		printf '%s %s\n' "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$turn/pid"
+		trap 'rm -rf "$turn"' EXIT
+		trap 'exit 129' HUP
+		trap 'exit 130' INT
+		trap 'exit 143' TERM
+		return 0
+	fi
+	holder=$(cat "$turn/pid" 2>/dev/null || true)
+	if [ -n "$holder" ] && ! kill -0 "${holder%% *}" 2>/dev/null; then
+		rm -rf "$turn"
+		take_turn
+		return
+	fi
+	die "worker '$profile' is in a turn (${holder:-starting}); send this after it ends" 75
+}
+
+# in_turn: prints the running turn's "<pid> <since>", or nothing
+in_turn() {
+	holder=$(cat "$state/turn/pid" 2>/dev/null || true)
+	if [ -n "$holder" ] && kill -0 "${holder%% *}" 2>/dev/null; then
+		printf '%s\n' "$holder"
+	fi
+}
+
 # run_agent <prompt> <session flag> <session id>: the agent in the worktree,
 # with the profile set; its output goes to the terminal and to the log.
 run_agent() {
+	take_turn
 	log=$state/log
 	printf '\n==== %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" >>"$log"
 	status_file=$state/status
@@ -163,6 +199,8 @@ cmd_new() {
 		die "no integration branch $base"
 
 	if [ -d "$wt" ]; then
+		[ -z "$(in_turn)" ] ||
+			die "worker '$profile' is in a turn; switch it to the next epic after the turn ends" 75
 		[ -z "$(git -C "$wt" status --porcelain)" ] ||
 			die "the worktree $wt has uncommitted changes; the worker's last epic is not finished"
 		# --no-track: a branch that tracks the integration branch lets a bare
@@ -219,6 +257,26 @@ cmd_brief() {
 	run_agent "$brief" --resume "$(cat "$state/session-id")"
 }
 
+cmd_status() {
+	[ $# -eq 1 ] || usage
+	worker "$1"
+	need_worker
+	turn_of=$(in_turn)
+	last=
+	if [ -f "$state/log" ]; then
+		last=$(grep -v -e '^==== ' -e '^[[:space:]]*$' "$state/log" | tail -n 1)
+	fi
+	if [ ! -f "$state/started" ]; then
+		turn_of="not started"
+	elif [ -n "$turn_of" ]; then
+		turn_of="in a turn since ${turn_of#* } (pid ${turn_of%% *})"
+	else
+		turn_of=idle
+	fi
+	printf 'profile: %s\nepic: %s\nbranch: %s\nturn: %s\nlast: %s\n' \
+		"$profile" "$(cat "$state/epic")" "$(cat "$state/branch")" "$turn_of" "$last"
+}
+
 cmd_path() {
 	[ $# -eq 1 ] || usage
 	worker "$1"
@@ -237,7 +295,7 @@ cmd_env() {
 command=$1
 shift
 case $command in
-new | start | brief | path | env)
+new | start | brief | status | path | env)
 	load_config
 	"cmd_$command" "$@"
 	;;

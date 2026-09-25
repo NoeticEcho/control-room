@@ -1,0 +1,132 @@
+#!/bin/sh
+# land-lock: run a landing under a lock that every coordinator on the machine
+# shares, so that two of them (yours and a scheduled loop) never land at once
+# (docs/coordinator-loop.md § Two coordinators).
+#
+#   land-lock [--lock <file>] [--wait <seconds>] [--who <name>] -- <command> [<arg>...]
+#       run the command while holding the lock; exit 75 if another holds it
+#   land-lock --path [--lock <file>]
+#       print the lock file it would use
+#
+# The lock file is --lock, else $CR_LAND_LOCK, else cr-land.lock in the git
+# common directory of the repository you are in: one file for every worktree
+# of it. Two coordinators working in separate clones must share one file
+# through --lock or CR_LAND_LOCK.
+#
+# --wait <seconds>  wait that long for the lock instead of giving up at once
+# --who <name>      who is landing, as the other side will see it
+#                   (default: $CR_LAND_WHO, else <user>@<host>)
+#
+# Exit status: the command's; 75 when the lock is held (EX_TEMPFAIL: try on
+# the next run); 69 when flock is not installed; 2 on a usage error; 1 when
+# the lock file cannot be opened. A command that itself exits 75 is told apart
+# by the "land-lock: held by" line on stderr, which only a held lock prints.
+#
+# The lock is flock(1) on the file, from util-linux. It is released when the
+# command ends, however land-lock ends: there is no stale lock to clean up.
+# The command does not inherit it, so a process the command leaves running in
+# the background does not keep it. HUP, INT and TERM sent to land-lock alone
+# wait for the command to finish, so the lock is never released while it
+# runs.
+#
+# Dependencies: POSIX sh, flock (util-linux), git (for the default lock).
+
+set -eu
+
+die() {
+	printf 'land-lock: %s\n' "$1" >&2
+	exit "${2:-1}"
+}
+
+usage() {
+	sed -n '5,9p' "$0" | sed 's/^# \{0,1\}//' >&2
+	exit 2
+}
+
+lock=${CR_LAND_LOCK:-}
+wait=
+who=${CR_LAND_WHO:-}
+print_path=
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--lock)
+		if [ $# -lt 2 ] || [ -z "$2" ]; then usage; fi
+		lock=$2
+		shift 2
+		;;
+	--wait)
+		[ $# -ge 2 ] || usage
+		case $2 in
+		'' | *[!0-9]*) die "--wait takes whole seconds, not '$2'" 2 ;;
+		esac
+		wait=$2
+		shift 2
+		;;
+	--who)
+		if [ $# -lt 2 ] || [ -z "$2" ]; then usage; fi
+		who=$2
+		shift 2
+		;;
+	--path)
+		print_path=1
+		shift
+		;;
+	--)
+		shift
+		break
+		;;
+	*) usage ;;
+	esac
+done
+
+if [ -z "$lock" ]; then
+	common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) ||
+		die "no lock file: run this inside the repository, or give --lock or CR_LAND_LOCK" 2
+	lock=$common/cr-land.lock
+fi
+
+if [ -n "$print_path" ]; then
+	[ $# -eq 0 ] || usage
+	printf '%s\n' "$lock"
+	exit 0
+fi
+
+[ $# -gt 0 ] || usage
+
+command -v flock >/dev/null 2>&1 ||
+	die "flock is not installed (on Linux it comes with util-linux; other systems: docs/coordinator-loop.md)" 69
+
+# Open without truncating: the holder's line is in the file.
+(: >>"$lock") 2>/dev/null || die "cannot open the lock file $lock"
+exec 9>>"$lock"
+
+held=
+if [ -n "$wait" ]; then
+	flock -w "$wait" 9 || held=1
+else
+	flock -n 9 || held=1
+fi
+if [ -n "$held" ]; then
+	holder=$(cat "$lock" 2>/dev/null || true)
+	die "held by ${holder:-another process} (lock: $lock); try again later" 75
+fi
+
+[ -n "$who" ] || who=$(id -un 2>/dev/null || echo someone)@$(uname -n 2>/dev/null || echo localhost)
+printf '%s, pid %s, since %s: %s\n' "$who" "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >"$lock"
+
+# A trapped signal waits for the foreground command (POSIX, 2.11 Signals and
+# Error Handling); the command itself gets the default action.
+sig=
+trap 'sig=HUP' HUP
+trap 'sig=INT' INT
+trap 'sig=TERM' TERM
+
+set +e
+"$@" 9>&-
+status=$?
+set -e
+
+printf '' >"$lock"
+[ -z "$sig" ] || printf 'land-lock: %s received; released after the command ended (status %s)\n' "$sig" "$status" >&2
+exit "$status"

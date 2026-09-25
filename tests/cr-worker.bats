@@ -271,6 +271,86 @@ session_of() {
 	[ "$(call 2 | jq -r .profile)" = docs ]
 }
 
+# ---- one turn at a time, and status ----------------------------------------
+
+# state_of <profile>: the worker's private directory
+state_of() {
+	printf '%s/cr-worker' "$(git -C "$CR_WORKTREES/$1" rev-parse --absolute-git-dir)"
+}
+
+@test "turn: a brief while the worker is in a turn exits 75 and sends nothing" {
+	"$CR_WORKER" new backend proj-12 login
+	"$CR_WORKER" start backend
+	# A turn held by a live process: this test's shell.
+	mkdir "$(state_of backend)/turn"
+	printf '%s 2026-09-25T10:00:00Z\n' "$$" >"$(state_of backend)/turn/pid"
+	printf 'Status?\n' >"$BATS_TEST_TMPDIR/q.md"
+	run "$CR_WORKER" brief backend "$BATS_TEST_TMPDIR/q.md"
+	[ "$status" -eq 75 ]
+	[[ "$output" == *"is in a turn ($$ 2026-09-25T10:00:00Z)"* ]]
+	[ "$(wc -l <"$FAKE_AGENT_LOG")" -eq 1 ]
+	run "$CR_WORKER" new backend proj-13 next
+	[ "$status" -eq 75 ]
+	[ "$(git -C "$CR_WORKTREES/backend" branch --show-current)" = claude/proj-12-login ]
+}
+
+@test "turn: a turn whose process is gone is stale, and taken over" {
+	"$CR_WORKER" new backend proj-12 login
+	"$CR_WORKER" start backend
+	sh -c 'exit 0' &
+	dead=$!
+	wait "$dead"
+	mkdir "$(state_of backend)/turn"
+	printf '%s 2026-09-25T10:00:00Z\n' "$dead" >"$(state_of backend)/turn/pid"
+	printf 'Status?\n' >"$BATS_TEST_TMPDIR/q.md"
+	run "$CR_WORKER" brief backend "$BATS_TEST_TMPDIR/q.md"
+	[ "$status" -eq 0 ]
+	[ "$(wc -l <"$FAKE_AGENT_LOG")" -eq 2 ]
+	[ ! -e "$(state_of backend)/turn" ]
+}
+
+@test "turn: the marker is held during the turn and gone after it, even when the agent fails" {
+	"$CR_WORKER" new backend proj-12 login
+	# The agent records whether a turn marker exists while it runs.
+	printf '#!/bin/sh\n[ -d "$1" ] && echo held >>"$2"; exit "${3:-0}"\n' >"$BATS_TEST_TMPDIR/agent"
+	chmod +x "$BATS_TEST_TMPDIR/agent"
+	mkdir -p "$(state_of backend)"
+	export CR_AGENT="$BATS_TEST_TMPDIR/agent-wrap"
+	printf '#!/bin/sh\nexec "%s" "%s" "%s" "${FAKE_AGENT_EXIT:-0}"\n' \
+		"$BATS_TEST_TMPDIR/agent" "$(state_of backend)/turn" "$BATS_TEST_TMPDIR/seen" >"$CR_AGENT"
+	chmod +x "$CR_AGENT"
+	run "$CR_WORKER" start backend
+	[ "$status" -eq 0 ]
+	[ "$(cat "$BATS_TEST_TMPDIR/seen")" = held ]
+	[ ! -e "$(state_of backend)/turn" ]
+	printf 'Status?\n' >"$BATS_TEST_TMPDIR/q.md"
+	FAKE_AGENT_EXIT=4 run "$CR_WORKER" brief backend "$BATS_TEST_TMPDIR/q.md"
+	[ "$status" -eq 4 ]
+	[ ! -e "$(state_of backend)/turn" ]
+}
+
+@test "status: epic, branch, turn and the worker's last line" {
+	"$CR_WORKER" new backend proj-12 login
+	run "$CR_WORKER" status backend
+	[ "$status" -eq 0 ]
+	[ "$output" = "profile: backend
+epic: proj-12
+branch: claude/proj-12-login
+turn: not started
+last: " ]
+	"$CR_WORKER" start backend
+	printf '\nEPIC proj-12 READY 0123 https://example.invalid/pr/1\n\n' >>"$(state_of backend)/log"
+	run "$CR_WORKER" status backend
+	[[ "$output" == *"turn: idle"* ]]
+	[[ "$output" == *"last: EPIC proj-12 READY 0123 https://example.invalid/pr/1" ]]
+	mkdir "$(state_of backend)/turn"
+	printf '%s 2026-09-25T10:00:00Z\n' "$$" >"$(state_of backend)/turn/pid"
+	run "$CR_WORKER" status backend
+	[[ "$output" == *"turn: in a turn since 2026-09-25T10:00:00Z (pid $$)"* ]]
+	run "$CR_WORKER" status nobody
+	[ "$status" -eq 1 ]
+}
+
 # ---- two workers, and the rest ---------------------------------------------
 
 @test "workers: two profiles get two worktrees and two sessions" {
