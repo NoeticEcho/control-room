@@ -1,0 +1,142 @@
+# The documentation site, built by GitHub Pages' own Jekyll from main, at the root.
+# Nothing here is needed to use control-room; it only turns the Markdown into pages.
+#
+# The Markdown files carry no front matter and must not need any: titles come from the first
+# heading (jekyll-titles-from-headings), README.md is the index of its directory
+# (jekyll-readme-index), and links between .md files become links between pages
+# (jekyll-relative-links). A link to anything that is not a page (a script, a schema, a
+# directory without a README) is pointed at the file on GitHub by _includes/content.html.
+
+title: control-room
+description: >-
+  One person, one AI coordinator, many AI coding agents: a protocol, prompts and scripts
+  for running them in parallel, with one desk for the decisions only the person can make.
+url: https://noeticecho.github.io
+baseurl: /control-room
+lang: en
+repository: NoeticEcho/control-room
+repository_url: https://github.com/NoeticEcho/control-room
+branch: main
+logo: https://noeticecho.github.io/icon-512.png
+
+# jekyll-seo-tag reads title, description, url, baseurl, lang, logo and each page's image. With
+# an image and no twitter.card set, it writes a summary_large_image card.
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-titles-from-headings
+  - jekyll-default-layout
+
+relative_links:
+  enabled: true
+  collections: false
+
+titles_from_headings:
+  enabled: true
+  strip_title: false
+  collections: false
+
+readme_index:
+  enabled: true
+  remove_originals: true
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+      image:
+        path: https://noeticecho.github.io/social/control-room.png
+        width: 1280
+        height: 640
+        alt: "control-room: one person, one AI coordinator, many AI coding agents, and one desk for the owner's decisions."
+  - scope:
+      path: "prompts/ru"
+    values:
+      lang: ru
+  # These files open with the text itself, not a heading, so jekyll-titles-from-headings finds
+  # no title. They are prompts meant to be pasted whole, so the title is given here instead of
+  # in front matter.
+  - scope:
+      path: "examples/end-to-end/1-brief.md"
+    values:
+      title: "The brief for wc-3"
+  - scope:
+      path: "prompts/en/brief.md"
+    values:
+      title: "The brief template"
+  - scope:
+      path: "prompts/en/coordinator.md"
+    values:
+      title: "The coordinator's session prompt"
+  - scope:
+      path: "prompts/en/master.md"
+    values:
+      title: "The master prompt"
+  - scope:
+      path: "prompts/en/worker-opening.md"
+    values:
+      title: "The worker's opening message"
+  - scope:
+      path: "prompts/ru/coordinator.md"
+    values:
+      title: "Промпт сессии координатора"
+  - scope:
+      path: "prompts/ru/interview.md"
+    values:
+      title: "Интервью для диспетчерской ИИ-воркеров"
+  - scope:
+      path: "prompts/ru/master.md"
+    values:
+      title: "Мастер-промпт"
+  - scope:
+      path: "runners/codex/AGENTS-worker.md"
+    values:
+      title: "Codex: the worker's section of AGENTS.md"
+  - scope:
+      path: "runners/e2b/opening.md"
+    values:
+      title: "e2b: the worker's opening message"
+  - scope:
+      path: "runners/local/opening.md"
+    values:
+      title: "Local worktrees: the worker's opening message"
+
+# What is not a page. The Markdown stays; the code, the data and the agents' own instructions
+# are read on GitHub, where they are versioned and highlighted.
+exclude:
+  - AGENTS.md
+  - CLAUDE.md
+  - LICENSE
+  - Makefile
+  - .github/
+  - tests/
+  - ci/
+  - schemas/
+  - desk/index.html
+  - desk/gh-desk
+  - desk/github-issues/
+  - scripts/guard
+  - scripts/validate-handoff
+  - runners/local/cr-worker
+  - runners/e2b/cr-e2b
+  - runners/claude-code-cloud/cr-cloud
+  - examples/end-to-end/5-ready-line.txt
+  - "*.json"
+  - "*.sh"
+  - "*.py"
+  - "*.mjs"
+  - "*.bats"
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/
