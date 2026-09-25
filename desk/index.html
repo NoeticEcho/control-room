@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decision desk</title>
+<style>
+:root {
+  --bg: #f7f7f5;
+  --card: #ffffff;
+  --text: #1c1c1a;
+  --muted: #5f5f5a;
+  --line: #deded8;
+  --accent: #2f5fd0;
+  --accent-text: #ffffff;
+  --code: #f0f0ec;
+  --open: #b25e00;
+  --answered: #2f5fd0;
+  --done: #2c7a3f;
+  --warn-bg: #fff4dc;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161615;
+    --card: #1f1f1d;
+    --text: #ecece8;
+    --muted: #a5a59d;
+    --line: #34342f;
+    --accent: #7ea2ff;
+    --accent-text: #10131c;
+    --code: #2a2a27;
+    --open: #f0a24a;
+    --answered: #7ea2ff;
+    --done: #6cc584;
+    --warn-bg: #3a2f14;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161615;
+  --card: #1f1f1d;
+  --text: #ecece8;
+  --muted: #a5a59d;
+  --line: #34342f;
+  --accent: #7ea2ff;
+  --accent-text: #10131c;
+  --code: #2a2a27;
+  --open: #f0a24a;
+  --answered: #7ea2ff;
+  --done: #6cc584;
+  --warn-bg: #3a2f14;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
+header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+h1 { font-size: 1.4rem; margin: 0; }
+.summary { color: var(--muted); font-size: .95rem; }
+.tools { display: flex; gap: 8px; flex-wrap: wrap; }
+button, .button {
+  font: inherit; font-size: .9rem;
+  border: 1px solid var(--line); background: var(--card); color: var(--text);
+  border-radius: 6px; padding: 6px 12px; cursor: pointer;
+}
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h2 { font-size: 1.05rem; margin: 28px 0 8px; color: var(--muted); font-weight: 600; }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px; margin: 12px 0; overflow-wrap: anywhere;
+}
+.card h3 { margin: 0 0 4px; font-size: 1.15rem; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: .8rem; color: var(--muted); margin-bottom: 8px; }
+.badge { border: 1px solid currentColor; border-radius: 999px; padding: 0 8px; font-weight: 600; }
+.badge.open { color: var(--open); } .badge.answered { color: var(--answered); } .badge.done { color: var(--done); }
+.field { margin: 12px 0 0; }
+.field > .label { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 2px; }
+.field p { margin: 0; white-space: pre-wrap; }
+ol, ul { margin: 0; padding-left: 1.4em; }
+.text { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; overflow: hidden; }
+.text-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; background: var(--code); font-size: .85rem; }
+.text-head button { flex-shrink: 0; white-space: nowrap; }
+pre { margin: 0; padding: 12px; overflow-x: auto; background: var(--code); font: .85rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
+.text pre { border-top: 1px solid var(--line); }
+.choice { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 6px 0; display: block; }
+.choice.recommended { border-color: var(--accent); }
+.choice .rec { color: var(--accent); font-weight: 600; font-size: .8rem; margin-left: 6px; }
+.choice .consequence { display: block; color: var(--muted); font-size: .9rem; }
+.choice input { margin-right: 8px; }
+.picked { color: var(--accent); font-weight: 600; }
+textarea { width: 100%; min-height: 70px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.answer-form { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.snippet { margin-top: 10px; }
+.hint { color: var(--muted); font-size: .85rem; margin: 6px 0; }
+a { color: var(--accent); }
+.notice { background: var(--warn-bg); border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
+.empty { color: var(--muted); }
+#answers { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); padding: 10px 0; margin-top: 24px; }
+#answers[hidden] { display: none; }
+.drop { border: 2px dashed var(--line); border-radius: 10px; padding: 24px; text-align: center; margin: 16px 0; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Decision desk</h1>
+      <div class="summary" id="summary">Loading…</div>
+    </div>
+    <div class="tools">
+      <label class="button" for="file">Open a desk file</label>
+      <input class="sr" type="file" id="file" accept="application/json,.json">
+      <button type="button" id="theme" aria-label="Switch theme">Theme: auto</button>
+    </div>
+  </header>
+  <div id="notice"></div>
+  <main id="desk"></main>
+  <section id="answers" hidden aria-live="polite">
+    <div class="hint">Answers are not saved by this page. Copy them and paste them to the coordinator, who writes them into the desk.</div>
+    <div class="row">
+      <button type="button" class="primary" data-action="copy-all">Copy all answers</button>
+      <span id="answers-count" class="hint"></span>
+    </div>
+  </section>
+</div>
+<script>
+/* control-room desk: renders desk.json (see docs/desk.md, desk/desk.schema.json).
+ * A static page cannot write files, so an answer becomes a JSON snippet to
+ * copy and paste to the coordinator, the only writer of the desk. */
+(function (root) {
+  "use strict";
+
+  var STATUSES = [
+    ["open", "Waiting on you"],
+    ["answered", "Answered, waiting on the coordinator"],
+    ["done", "Done"]
+  ];
+
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function safeUrl(url) {
+    return typeof url === "string" && /^(https?:\/\/|mailto:)/i.test(url) ? url : null;
+  }
+
+  function field(name, label, inner) {
+    return '<div class="field" data-field="' + name + '"><div class="label">' + esc(label) + "</div>" + inner + "</div>";
+  }
+
+  function when(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    return isNaN(d) ? esc(iso) : esc(d.toISOString().replace("T", " ").slice(0, 16) + " UTC");
+  }
+
+  function renderChoices(card) {
+    var picked = card.answer && card.answer.choice;
+    var items = card.choices.map(function (c) {
+      var input = card.status === "open"
+        ? '<input type="radio" name="choice-' + esc(card.id) + '" value="' + esc(c.id) + '"' + (c.recommended ? " checked" : "") + ">"
+        : "";
+      return '<label class="choice' + (c.recommended ? " recommended" : "") + '" data-choice="' + esc(c.id) + '">' +
+        input + "<strong>" + esc(c.label) + "</strong>" +
+        (c.recommended ? '<span class="rec">recommended</span>' : "") +
+        (picked === c.id ? '<span class="rec picked">chosen</span>' : "") +
+        (c.consequence ? '<span class="consequence">' + esc(c.consequence) + "</span>" : "") +
+        "</label>";
+    });
+    return field("choices", "Choices", items.join(""));
+  }
+
+  function renderCard(card, index) {
+    var id = card.id || "card-" + index;
+    var status = card.status || "open";
+    var html = '<article class="card" id="card-' + esc(id) + '" data-card="' + esc(id) + '" data-field="card">';
+    html += '<div class="meta">' +
+      '<span class="badge ' + esc(status) + '" data-field="status">' + esc(status) + "</span>" +
+      '<span data-field="kind">' + esc(card.kind || "") + "</span>" +
+      '<span data-field="id">' + esc(id) + "</span>" +
+      (card.created ? '<span data-field="created">opened ' + when(card.created) + "</span>" : "") +
+      (card.source ? '<span data-field="source">from ' + esc(card.source) + "</span>" : "") +
+      "</div>";
+    html += '<h3 data-field="title">' + esc(card.title) + "</h3>";
+    html += field("why", "Why it waits", "<p>" + esc(card.why) + "</p>");
+    if (card.context) html += field("context", "Context", "<p>" + esc(card.context) + "</p>");
+    if (card.steps && card.steps.length) {
+      html += field("steps", "Steps", "<ol>" + card.steps.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + "</ol>");
+    }
+    if (card.texts && card.texts.length) {
+      html += field("texts", "Texts to paste, whole", card.texts.map(function (t, j) {
+        return '<div class="text"><div class="text-head"><span>' + esc(t.label) + "</span>" +
+          '<button type="button" data-action="copy" data-copy="text-' + esc(id) + "-" + j + '">Copy</button></div>' +
+          '<pre id="text-' + esc(id) + "-" + j + '">' + esc(t.text) + "</pre></div>";
+      }).join(""));
+    }
+    if (card.choices && card.choices.length) html += renderChoices(card);
+    if (card.links && card.links.length) {
+      html += field("links", "Links", "<ul>" + card.links.map(function (l) {
+        var url = safeUrl(l.url);
+        return "<li>" + (url
+          ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(l.label) + "</a>"
+          : esc(l.label) + " (link refused: " + esc(l.url) + ")") + "</li>";
+      }).join("") + "</ul>");
+    }
+    if (card.answer) {
+      html += field("answer", "Answer, " + when(card.answer.at),
+        (card.answer.choice ? '<p>Chose <strong>' + esc(card.answer.choice) + "</strong></p>" : "") +
+        (card.answer.note ? "<p>" + esc(card.answer.note) + "</p>" : ""));
+    }
+    if (card.resolution) html += field("resolution", "What the coordinator did", "<p>" + esc(card.resolution) + "</p>");
+    if (status === "open") {
+      html += '<div class="answer-form" data-field="answer-form">' +
+        '<label for="note-' + esc(id) + '"><strong>Your answer</strong>' +
+        (card.choices && card.choices.length ? " (pick above, add a note if you like)" : "") + "</label>" +
+        '<textarea id="note-' + esc(id) + '" placeholder="A note for the coordinator"></textarea>' +
+        '<div class="row"><button type="button" class="primary" data-action="answer" data-card="' + esc(id) + '">Prepare the answer</button></div>' +
+        '<div class="snippet" id="snippet-' + esc(id) + '"></div></div>';
+    }
+    return html + "</article>";
+  }
+
+  /* Returns {html, count, problems}. Pure: no DOM, so it can be tested. */
+  function renderDesk(data) {
+    if (!data || !Array.isArray(data.cards)) throw new Error("not a desk: expected an object with a \"cards\" array");
+    var problems = [];
+    var groups = {};
+    data.cards.forEach(function (card, i) {
+      ["id", "kind", "title", "why", "status"].forEach(function (key) {
+        if (card[key] == null || card[key] === "") problems.push("card " + (card.id || i) + " has no " + key);
+      });
+      var s = card.status || "open";
+      (groups[s] = groups[s] || []).push(renderCard(card, i));
+    });
+    var html = "";
+    var known = STATUSES.map(function (s) { return s[0]; });
+    STATUSES.concat(Object.keys(groups).filter(function (s) { return known.indexOf(s) < 0; })
+      .map(function (s) { return [s, "Status " + s]; }))
+      .forEach(function (s) {
+        var cards = groups[s[0]] || [];
+        html += '<section data-status="' + esc(s[0]) + '"><h2>' + esc(s[1]) + " (" + cards.length + ")</h2>" +
+          (cards.length ? cards.join("") : '<p class="empty">None.</p>') + "</section>";
+      });
+    var counts = {};
+    data.cards.forEach(function (c) { counts[c.status || "open"] = (counts[c.status || "open"] || 0) + 1; });
+    return { html: html, count: data.cards.length, counts: counts, problems: problems };
+  }
+
+  function answerSnippet(cardId, choice, note, at) {
+    var answer = {};
+    if (choice) answer.choice = choice;
+    if (note) answer.note = note;
+    answer.at = at;
+    return { card: cardId, status: "answered", answer: answer };
+  }
+
+  root.ControlRoomDesk = { renderDesk: renderDesk, renderCard: renderCard, answerSnippet: answerSnippet, esc: esc, safeUrl: safeUrl };
+
+  if (typeof document === "undefined") return;
+
+  /* ---- the page ---- */
+  var answers = {};
+  var deskEl = document.getElementById("desk");
+  var noticeEl = document.getElementById("notice");
+
+  function notice(html) { noticeEl.innerHTML = html ? '<div class="notice">' + html + "</div>" : ""; }
+
+  function copy(text, button) {
+    function done(ok) {
+      if (!button) return;
+      var old = button.textContent;
+      button.textContent = ok ? "Copied" : "Select and copy by hand";
+      setTimeout(function () { button.textContent = old; }, 1500);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(fallback(text)); });
+    } else {
+      done(fallback(text));
+    }
+  }
+
+  function fallback(text) {
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed"; area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(area);
+    return ok;
+  }
+
+  function show(data, from) {
+    var result;
+    try { result = renderDesk(data); } catch (e) {
+      deskEl.innerHTML = "";
+      document.getElementById("summary").textContent = "No desk loaded";
+      notice(esc(from) + ": " + esc(e.message));
+      return;
+    }
+    deskEl.innerHTML = result.html;
+    var c = result.counts;
+    document.getElementById("summary").textContent =
+      (c.open || 0) + " waiting on you · " + (c.answered || 0) + " answered · " + (c.done || 0) + " done — " + from;
+    notice(result.problems.length ? "This desk has problems: " + result.problems.map(esc).join("; ") : "");
+    answers = {};
+    updateAnswers();
+  }
+
+  function updateAnswers() {
+    var n = Object.keys(answers).length;
+    document.getElementById("answers").hidden = n === 0;
+    document.getElementById("answers-count").textContent = n + (n === 1 ? " answer" : " answers") + " prepared";
+  }
+
+  deskEl.addEventListener("click", function (event) {
+    var button = event.target.closest("button[data-action]");
+    if (!button) return;
+    if (button.dataset.action === "copy") {
+      var pre = document.getElementById(button.dataset.copy);
+      if (pre) copy(pre.textContent, button);
+    } else if (button.dataset.action === "answer") {
+      var id = button.dataset.card;
+      var card = document.querySelector('[data-card="' + CSS.escape(id) + '"]');
+      var picked = card.querySelector('input[type="radio"]:checked');
+      var note = card.querySelector("textarea").value.trim();
+      if (!picked && !note) { notice("Pick a choice or write a note before preparing an answer."); return; }
+      notice("");
+      var snippet = answerSnippet(id, picked && picked.value, note, new Date().toISOString());
+      answers[id] = snippet;
+      var out = document.getElementById("snippet-" + id);
+      out.innerHTML = '<div class="text"><div class="text-head"><span>Paste this to the coordinator</span>' +
+        '<button type="button" data-action="copy" data-copy="answer-' + esc(id) + '">Copy</button></div>' +
+        '<pre id="answer-' + esc(id) + '">' + esc(JSON.stringify(snippet, null, 2)) + "</pre></div>";
+      updateAnswers();
+    }
+  });
+
+  document.querySelector('[data-action="copy-all"]').addEventListener("click", function (event) {
+    var list = Object.keys(answers).map(function (k) { return answers[k]; });
+    copy(JSON.stringify({ answers: list }, null, 2), event.currentTarget);
+  });
+
+  function readFile(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      try { show(JSON.parse(reader.result), file.name); } catch (e) { notice(esc(file.name) + " is not JSON: " + esc(e.message)); }
+    };
+    reader.readAsText(file);
+  }
+  document.getElementById("file").addEventListener("change", function (e) { if (e.target.files[0]) readFile(e.target.files[0]); });
+  document.addEventListener("dragover", function (e) { e.preventDefault(); });
+  document.addEventListener("drop", function (e) {
+    e.preventDefault();
+    if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);
+  });
+
+  /* Theme: auto (the system's), light or dark. The choice is a convenience
+   * kept in this browser only. */
+  var themes = ["auto", "light", "dark"];
+  var themeButton = document.getElementById("theme");
+  function applyTheme(t) {
+    if (t === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", t);
+    themeButton.textContent = "Theme: " + t;
+  }
+  var theme = "auto";
+  try { theme = localStorage.getItem("control-room-desk-theme") || "auto"; } catch (e) { theme = "auto"; }
+  if (themes.indexOf(theme) < 0) theme = "auto";
+  applyTheme(theme);
+  themeButton.addEventListener("click", function () {
+    theme = themes[(themes.indexOf(theme) + 1) % themes.length];
+    applyTheme(theme);
+    try { localStorage.setItem("control-room-desk-theme", theme); } catch (e) { /* private mode */ }
+  });
+
+  /* Load: ?src=<file>, else desk.json, else desk.example.json. Opened from
+   * disk (file://) the browser refuses to fetch, so the page asks for the file. */
+  function load() {
+    var src = new URLSearchParams(location.search).get("src");
+    var candidates = src ? [src] : ["desk.json", "desk.example.json"];
+    (function next(i) {
+      if (i >= candidates.length) {
+        document.getElementById("summary").textContent = "No desk loaded";
+        deskEl.innerHTML = '<div class="drop">This page cannot read files by itself here' +
+          (location.protocol === "file:" ? " (opened from disk)" : "") +
+          '. Choose <strong>Open a desk file</strong> and pick <code>desk.json</code>, or drop it on the page.</div>';
+        return;
+      }
+      fetch(candidates[i], { cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (data) { show(data, candidates[i]); })
+        .catch(function () { next(i + 1); });
+    })(0);
+  }
+  load();
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
+</body>
+</html>

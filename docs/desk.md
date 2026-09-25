@@ -20,6 +20,11 @@ action the agents have no right to take. Examples of actions:
 | `answer` | `{choice, note, at}`, written by the owner |
 | `status` | `open` → `answered` (the owner replied) → `done` (the coordinator acted and says what it did in `resolution`) |
 
+Also `id` (used in the owner's answer), `kind` (`decision` or `action`),
+`created` and `source` (where the card came from). The full format is
+[`desk/desk.schema.json`](../desk/desk.schema.json), with an example in
+[`desk/desk.example.json`](../desk/desk.example.json).
+
 **The rule of a card:** the owner never has to fill a gap. If a script is to
 be pasted, the card holds the whole script, not "run such-and-such file".
 
@@ -38,11 +43,16 @@ the answer within the question asked.
 
 ## Where it lives
 
-- **GitHub Issues** with a `decision` label: the owner answers in a comment or
-  with a label, and the coordinator reads through the API.
-- **The static page in `desk/`**: `index.html` renders `desk.json`, and the
-  owner's answers are written back to the file by the coordinator from chat.
-  This is the simplest option, with no service.
+- **GitHub Issues** with a `decision` or `action` label: the owner answers in a
+  comment and adds `answered`, and the coordinator reads through the API.
+  [`desk/github-issues.md`](../desk/github-issues.md) has the labels, the
+  issue template and `desk/gh-desk` for the hourly check.
+- **The static page in `desk/`**: `index.html` renders `desk.json`. The owner
+  answers in the page, which gives the answer as a JSON snippet to paste to
+  the coordinator, who writes it into the file: the page cannot write, and a
+  downloaded copy of the queue would make two writers
+  ([`desk/README.md`](../desk/README.md)). This is the simplest option, with
+  no service.
 - **An artifact with a database** (claude.ai): cards in the page's database,
   written by the coordinator through its tools and answered by the owner in
   the page. This is what the original setup uses.

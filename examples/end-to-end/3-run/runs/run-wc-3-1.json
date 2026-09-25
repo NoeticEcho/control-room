@@ -1,0 +1,22 @@
+{
+  "id": "run-wc-3-1",
+  "epic": "wc-3",
+  "head": "c25fff009a37aa7cc3e776209868cc786fff6f43",
+  "gates": {
+    "status": "passed",
+    "seconds": 0,
+    "head": "c25fff009a37aa7cc3e776209868cc786fff6f43",
+    "results": [
+      {
+        "id": "check.sh",
+        "command": "sh check.sh",
+        "outcome": "passed",
+        "output": "ok lines\nok words"
+      }
+    ]
+  },
+  "red_before_change": {
+    "command": "sh check.sh",
+    "output": "ok lines\nFAIL words: got 2"
+  }
+}

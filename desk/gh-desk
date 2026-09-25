@@ -1,0 +1,88 @@
+#!/bin/sh
+# gh-desk: the decision desk on GitHub Issues (desk/github-issues.md).
+#
+#   gh-desk          list the cards: answered ones (act on them), then the
+#                    ones waiting on the owner, oldest first, then one summary
+#                    line for the coordinator's hourly reminder
+#   gh-desk labels   create or update the labels decision, action, answered,
+#                    done
+#
+# A card is an open issue labelled `decision` or `action`. The owner answers
+# in a comment and adds `answered`; the coordinator acts, says what it did in
+# a comment, adds `done` and closes the issue.
+#
+# Environment: GH_DESK_REPO (owner/repo; default: the repository gh finds
+# from the current directory), GH_DESK_NOW (the time as epoch seconds, for
+# tests).
+#
+# Dependencies: POSIX sh, gh (signed in), jq.
+
+set -eu
+
+die() {
+	printf 'gh-desk: %s\n' "$1" >&2
+	exit "${2:-1}"
+}
+
+command -v gh >/dev/null 2>&1 || die "needs the GitHub CLI, gh" 2
+command -v jq >/dev/null 2>&1 || die "needs jq" 2
+
+# gh_repo <gh arguments...>: gh, with -R when GH_DESK_REPO is set
+gh_repo() {
+	if [ -n "${GH_DESK_REPO:-}" ]; then
+		gh "$@" -R "$GH_DESK_REPO"
+	else
+		gh "$@"
+	fi
+}
+
+cmd_labels() {
+	gh_repo label create decision --force --color 5319e7 --description "Desk: the owner decides"
+	gh_repo label create action --force --color d93f0b --description "Desk: the owner does something agents may not"
+	gh_repo label create answered --force --color 1d76db --description "Desk: the owner answered; the coordinator acts"
+	gh_repo label create "done" --force --color 0e8a16 --description "Desk: the coordinator acted on the answer"
+}
+
+cmd_list() {
+	fields=number,title,labels,createdAt,url,comments
+	decision=$(gh_repo issue list --state open --label decision --limit 200 --json "$fields") ||
+		die "gh issue list failed"
+	action=$(gh_repo issue list --state open --label action --limit 200 --json "$fields") ||
+		die "gh issue list failed"
+	printf '%s\n%s\n' "$decision" "$action" | jq -rs --arg now "${GH_DESK_NOW:-}" '
+		(if $now == "" then now else ($now | tonumber) end) as $now
+		| add | unique_by(.number)
+		| map(
+			[.labels[].name] as $names
+			| . + {
+				kind: (if ($names | index("decision")) then "decision" else "action" end),
+				state: (if ($names | index("done")) then "done"
+					elif ($names | index("answered")) then "answered"
+					else "open" end),
+				hours: ((($now - (.createdAt | fromdateiso8601)) / 3600) | floor),
+				ncomments: (.comments | length)
+			})
+		| sort_by(.createdAt) as $cards
+		| def age: if .hours < 48 then "\(.hours)h" else "\(.hours / 24 | floor)d" end;
+		  def line: "  #\(.number) \(.kind)\t\(.title)\t(open \(age), \(.ncomments) comment\(if .ncomments == 1 then "" else "s" end)) \(.url)";
+		  def group($state; $heading):
+			[$cards[] | select(.state == $state)] as $g
+			| if ($g | length) > 0 then "\($heading) (\($g | length)):", ($g[] | line) else empty end;
+		group("answered"; "Answered: act on these"),
+		group("open"; "Waiting on the owner"),
+		group("done"; "Done but still open: close them"),
+		([$cards[] | select(.state == "open")] as $open
+		| [$cards[] | select(.state == "answered")] as $answered
+		| if ($open | length) == 0 and ($answered | length) == 0 then "desk: nothing waits on the owner or on you"
+		  else "desk: \($open | length) waiting on the owner, \($answered | length) answered"
+			+ (if ($open | length) > 0 then "; most urgent: #\($open[0].number) \($open[0].title) (open \($open[0] | age))" else "" end)
+		  end)
+	'
+}
+
+case ${1:-list} in
+list) cmd_list ;;
+labels) cmd_labels ;;
+-h | --help | help) sed -n '4,11p' "$0" | sed 's/^# \{0,1\}//' ;;
+*) die "unknown command '$1'; see gh-desk --help" 2 ;;
+esac

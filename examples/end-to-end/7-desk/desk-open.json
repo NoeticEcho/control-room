@@ -1,0 +1,40 @@
+{
+  "$schema": "../../../desk/desk.schema.json",
+  "updated": "2026-09-25T09:10:00Z",
+  "cards": [
+    {
+      "id": "wc-3-unicode",
+      "kind": "decision",
+      "title": "How should wordcount count words in text that is not ASCII?",
+      "why": "wc-3.2 waits on it; wc-3.1 (words) landed without it.",
+      "context": "awk splits words on ASCII blanks. Text with non-breaking spaces, or in scripts written without spaces, counts oddly. The fix is small either way; the choice is what users are promised.",
+      "choices": [
+        {
+          "id": "unicode-spaces",
+          "label": "Split on every Unicode space",
+          "consequence": "What most people expect for European text. Scripts without spaces still count one word per run. One more test.",
+          "recommended": true
+        },
+        {
+          "id": "ascii-only",
+          "label": "Keep ASCII blanks, and document it",
+          "consequence": "No code change. The README says what counts as a word."
+        },
+        {
+          "id": "segmenter",
+          "label": "Use a word segmenter library",
+          "consequence": "Right for every script, but the tool gains its first dependency."
+        }
+      ],
+      "links": [
+        {
+          "label": "The question in the handoff",
+          "url": "https://git.example.invalid/wordcount/blob/claude/wc-3-count-words/handoff/wc-3.json"
+        }
+      ],
+      "status": "open",
+      "created": "2026-09-25T09:10:00Z",
+      "source": "handoff wc-3, questions[0]"
+    }
+  ]
+}
