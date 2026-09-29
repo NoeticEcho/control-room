@@ -62,7 +62,8 @@ command_n() {
 	clone=$(grep -n '^git clone' <<<"$cmds" | cut -d: -f1)
 	install=$(grep -n 'claude.ai/install.sh' <<<"$cmds" | cut -d: -f1)
 	agent=$(grep -n '^nohup' <<<"$cmds" | cut -d: -f1)
-	[ "$clone" -lt "$install" ] && [ "$install" -lt "$agent" ]
+	[ "$clone" -lt "$install" ]
+	[ "$install" -lt "$agent" ]
 	[[ "$(sed -n "${clone}p" <<<"$cmds")" == "git clone --branch main https://example.invalid/o/r.git /home/user/repo" ]]
 }
 

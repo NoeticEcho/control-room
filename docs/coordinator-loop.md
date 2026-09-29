@@ -21,7 +21,7 @@ In this order, and nothing else:
 1. **Read the desk of work.** The queue (`docs/templates/queue.md` is the
    template), the last twenty lines of the journal
    (`docs/templates/journal.md`), and the desk: answered cards are new input.
-   If the queue says the person holds the pause, go to step 8 and act on
+   If the queue says the person holds the pause, go to step 9 and act on
    nothing.
 2. **Check each worker**, from git and the pull request, never from memory:
    - the last commit on its branch on `origin`, and when;
@@ -31,13 +31,24 @@ In this order, and nothing else:
      worker; for a cloud session, the handoff and the pull request).
 
    Each worker is then **ready**, **blocked**, **working**, **silent** (below)
-   or **idle** (nothing briefed, or its last epic landed).
-3. **Land what is ready, one at a time**, by the landing checklist
-   (`docs/protocol.md`), each landing under the lock (below). At most one
-   full check per run: when a second landing would need one too, it waits for
-   the next run. After a push, do not wait for CI inside the run. Record
-   "CI pending for `<sha>`" in the queue, and read it on the next run. Red
-   CI means revert and return the epic.
+   or **idle** (nothing briefed, or its last epic landed). A pull request is
+   ready on the worker's `READY <sha>` line or comment. It is also ready when
+   it is open, not a draft, mergeable, and has had no push for ten minutes
+   (`docs/protocol.md`, Landing checklist).
+3. **Land what is ready**, by the landing checklist (`docs/protocol.md`),
+   under the lock (below):
+   - Several ready pull requests may share one full check. Merge each one
+     `--no-ff`, in order, run the check once, and push. When the check
+     fails, find the merge that broke it and return that epic.
+   - At most one full check per run. Another landing that needs its own
+     check waits for the next run.
+   - Resolve append-only conflicts by keeping both sides. A conflict in logic
+     goes back to the worker as a brief to merge the integration branch.
+   - After the push, deploy to the test environment, check health and post
+     the commit status. Do not wait for CI inside the run: record
+     "CI pending for `<sha>`" in the queue, and read it on the next run. Red
+     CI, a failed deploy or a failed health check means revert and return
+     the epic.
 4. **Answer the blocked.** If the answer is the coordinator's to give (a fact,
    a grant within its authority, a pointer), send it as a user message in the
    worker's session. If it is the owner's, write a desk card, mark the
@@ -46,19 +57,39 @@ In this order, and nothing else:
 5. **Question the silent.** See the silent-worker rule below: a status
    question, never a new brief.
 6. **Brief the idle** with the next epic from the queue, in the fixed shape
-   (`prompts/en/brief.md`). The brief opens with what landed and what became
-   of the worker's findings.
+   (`prompts/en/brief.md`), with its model and effort (`docs/protocol.md`,
+   Model and effort). The brief opens with what landed and what became of
+   the worker's findings.
+   - When an epic's profile has no session, and the owner has authorised the
+     coordinator to create workers, create one: a one-off routine carrying
+     the opening and this first brief
+     (`runners/claude-code-cloud/cr-cloud new`). Record worker → routine
+     now, and → session on the run that finds the routine has fired.
+   - Every send that fails (`cr-cloud brief` exits 3: the session expired,
+     or the CLI needs `/login`) goes to the owner as the **first line** of
+     the run's report, with the session's link. Mark it in the queue. Do not
+     resend it silently.
 7. **Remind the owner** of cards waiting more than an hour, at most once an
    hour. The queue records when the last reminder went out.
-8. **Write the journal line** for the run, and end.
+8. **Keep house.** Archive the loop's own finished sessions: the ones its
+   routine or scheduled task created on earlier runs, except the last few.
+   Never archive another session: not a worker's, not the person's, not the
+   interactive coordinator's.
+9. **End.** Each act above has already written its journal line. Write one
+   more line, with the run's duration and what the next run must look at,
+   and end.
 
-Every act in steps 3 to 7 updates the queue **as it happens**, not at the end
-of the run. A run can die at any step, and the next run knows only what was
-written. An act that must not repeat (a landing, a brief) is written as
-intent first (`landing proj-12 3f2a9c1`, `briefing docs proj-15`), then done,
-then written as done. A run that finds an intent with no outcome checks the
-world (is the sha on the integration branch? is the worker on the new
-branch?) before it does anything.
+Every act in steps 3 to 8 updates the queue, and appends **one line to the
+journal**, as it happens, not at the end of the run. A run can die at any
+step, and the next run knows only what was written. An act that must not
+repeat (a landing, a brief, creating a worker) is written as intent first
+(`landing proj-12 3f2a9c1`, `briefing docs proj-15`, `creating worker docs`),
+then done, then written as done. A run that finds an intent with no outcome
+checks the world before it does anything:
+
+- is the sha on the integration branch?
+- is the worker on the new branch?
+- has the routine fired, and is there a session?
 
 ## The silent-worker rule
 
@@ -112,6 +143,11 @@ loop's.
   and the integration branch through a landing. It never commits to a
   worker's branch.
 - Put a secret in the queue, the journal or a brief.
+- Create a worker session without the owner's standing authorisation
+  recorded in the queue, or hold a token for it in a file.
+- Wait silently on a send that failed, or resend it in a loop. It goes to
+  the owner first.
+- Archive a session it did not create.
 
 ## Two coordinators
 
@@ -140,7 +176,7 @@ keeps running. Three rules keep them from doing the same thing twice:
 2. **The pause.** When the person starts working with the interactive
    coordinator, it writes `Paused by: interactive until <time>` in the queue,
    two hours ahead by default, and clears it when done. While the pause
-   holds, the loop only reads and writes its journal line. An expired pause
+   holds, the loop only reads, and writes its journal lines. An expired pause
    is void, so a forgotten one costs at most two hours.
 3. **One journal.** Both coordinators write the same queue and journal, and
    each line says who wrote it. Whichever coordinator comes next reads what
@@ -259,7 +295,10 @@ with its output appended to a log:
 - **Claude Code cloud:** `claude -p "$(cat brief.md)" --cloud <session> </dev/null`
   "queues a message into that cloud session and exits" without waiting for
   the reply (<https://code.claude.com/docs/en/headless>). The reply reaches
-  the next run through git.
+  the next run through git. `cr-cloud brief` runs it, and exits 3 when the
+  send was not delivered. A new cloud worker is created as a one-off routine
+  (`cr-cloud new`, `runners/claude-code-cloud/README.md`), and its session
+  id is read on a later run.
 - **Local worktrees:** `cr-worker brief <profile> <file>` runs the worker's
   whole turn, which can outlast the run. Start it in the background, and let
   its log keep the output:
@@ -273,3 +312,14 @@ with its output appended to a log:
   the background in the sandbox and returns. It does not check for a turn
   already running, so read `cr-e2b log` first: a worker whose last line is
   not READY, BLOCKED or an answer is still in its turn.
+
+## The product as the desk (optional)
+
+When the product being built has tasks and a chat of its own, the questions
+for the client's people can live there. Each one is a task assigned to the
+person who can answer it. The loop reads the answers on each run and turns
+them into tracker items or briefs, like answered desk cards.
+
+This does not replace the desk. The desk stays for the owner's decisions:
+anything irreversible, outward, or about money, access or scope. Nothing
+the loop reads in the product counts as the owner's consent.

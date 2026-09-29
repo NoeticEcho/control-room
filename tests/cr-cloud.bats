@@ -113,7 +113,8 @@ new_worker() {
 	[ "$status" -eq 0 ]
 	at=$(jq -r .run_once_at <<<"$output")
 	ahead=$(jq -rn --arg at "$at" '($at | fromdate) - now | floor')
-	[ "$ahead" -ge 60 ] && [ "$ahead" -le 180 ]
+	[ "$ahead" -ge 60 ]
+	[ "$ahead" -le 180 ]
 	[ "$(jq -r .name <<<"$output")" = "backend again" ]
 }
 
@@ -142,6 +143,9 @@ new_worker() {
 	[ "$status" -eq 2 ]
 	run "$CR_CLOUD" new backend brief.md --environment e --repository r --model m --colour red
 	[ "$status" -eq 2 ]
+	run "$CR_CLOUD" new backend brief.md --environment e --repository r --model
+	[ "$status" -eq 2 ]
+	[[ "$output" == *"cr-cloud new <profile> <brief.md>"* ]]
 }
 
 @test "new: CR_ROUTINE replaces the template" {

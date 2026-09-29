@@ -20,17 +20,29 @@ scripts and the details for each runner are in [`runners/`](../runners/).
   one-line `bash scripts/setup.sh` can fail to start.
 - **Knowing it is a worker.** Claude Code sets `CLAUDE_CODE_REMOTE=true` in a
   cloud session. The agent instructions branch on it: coordinator or worker.
-- **Session.** The owner opens a session with the opening message
-  (`prompts/en/worker-opening.md`). The worker replies
-  `WORKER <profile> READY`. The owner gives the coordinator the session URL
-  **and says which profile it is**.
+- **Session.** The coordinator creates it. `claude --cloud` cannot create
+  a session non-interactively, so the new worker is a one-off routine that
+  fires a minute or two later:
+  - the routine keeps its session (`persist_session`);
+  - its one user message is the opening followed by the first brief;
+  - `runners/claude-code-cloud/cr-cloud new` prints the routine's body, and
+    the coordinator's session submits it under the owner's sign-in;
+  - the owner authorises this once.
+
+  After the routine fires, its run gives the session id, which the
+  coordinator records. By hand instead, the owner opens a session with the
+  opening message (`prompts/en/worker-opening.md`), and the worker replies
+  `WORKER <profile> READY`.
 - **Brief.**
 
       claude -p "$(cat brief.md)" --cloud <session-url> < /dev/null
 
   It arrives in the running session as a user message
-  (`runners/claude-code-cloud/cr-cloud brief` runs it). A message relayed
+  (`runners/claude-code-cloud/cr-cloud brief` runs it, and exits 3 when the
+  send fails). A failed send goes to the owner at once. A message relayed
   from another session is not a brief.
+- **Model and effort.** The routine sets the model. The brief says the effort
+  in words (`docs/protocol.md`, Model and effort).
 - **Pull requests.** The cloud VM may have no `gh`. The worker opens pull
   requests through its GitHub tools. The guard judges both forms.
 
