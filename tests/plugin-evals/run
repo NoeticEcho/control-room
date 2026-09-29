@@ -1,0 +1,54 @@
+#!/bin/sh
+# run: the plugin's eval suite, `claude plugin eval`, with and without the
+# plugin (docs/plugin.md, "Keep it right").
+#
+#   tests/plugin-evals/run [claude plugin eval options...]
+#
+# The cases live here, not in plugin/, so that nobody who installs the plugin
+# downloads them; `claude plugin eval` only loads a plugin from under the
+# directory it runs against. So this copies plugin/ into a scratch directory,
+# puts the cases in its evals/, and runs the suite there. The result
+# (aggregate-result.json, report.html) goes to tests/plugin-evals/results/
+# <UTC time>/, or to $CR_EVAL_OUT; the scratch copy is removed.
+#
+# It passes --trust-plugin, because the scratch copy is new each time and is
+# this repository's own plugin, and --no-publish; any other option (--runs,
+# --case, --model, -j) goes through.
+#
+# Every run and judge is a model call on your Claude account. CI does not run
+# this.
+#
+# Environment: CR_AGENT (default: claude), CR_EVAL_OUT.
+# Dependencies: POSIX sh, cp, mktemp, date.
+
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$here/../.." && pwd)
+agent=${CR_AGENT:-claude}
+out=${CR_EVAL_OUT:-$here/results/$(date -u +%Y-%m-%dT%H-%M-%SZ)}
+
+[ -f "$root/plugin/.claude-plugin/plugin.json" ] || {
+	echo "run: no plugin at $root/plugin" >&2
+	exit 2
+}
+[ -d "$here/cases" ] || {
+	echo "run: no cases at $here/cases" >&2
+	exit 2
+}
+command -v "$agent" >/dev/null 2>&1 || {
+	echo "run: $agent is not installed" >&2
+	exit 69
+}
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/cr-plugin-eval.XXXXXX")
+trap 'rm -rf "$work"' EXIT INT TERM
+cp -R "$root/plugin" "$work/plugin"
+rm -rf "$work/plugin/evals"
+cp -R "$here/cases" "$work/plugin/evals"
+mkdir -p "$out"
+
+status=0
+"$agent" plugin eval "$work/plugin" --trust-plugin --no-publish --output-dir "$out" "$@" || status=$?
+echo "run: results in $out"
+exit "$status"

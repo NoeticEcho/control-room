@@ -160,3 +160,7 @@ A coordinator that runs on a schedule, and starts every run with no memory
     what the release builds;
   - a pull request that merged main after its READY line lands at the READY
     sha, and is closed by hand when nothing else came after.
+
+## CR-11: the Claude plugin
+
+- `plugin/`: `noetic-control-room`, four skills (brief a worker, land a READY pull request, run the desk, start a cloud worker) and two shell scripts, checked by `tests/plugin.bats` and `claude plugin validate` in CI, compared with and without the plugin by `claude plugin eval` (`docs/plugin.md`).

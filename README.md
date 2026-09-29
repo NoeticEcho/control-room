@@ -73,6 +73,21 @@ brief (coordinator → worker, as a user message)
 | `runners/codex/` | The protocol mapped onto Codex cloud, from its documentation, and the guard's rules for `AGENTS.md` |
 | `Makefile`, `tests/` | `make check`: shellcheck and the bats suites, also run in CI |
 
+## Use it as a Claude plugin
+
+[`plugin/`](plugin/) is control-room as a plugin for Claude,
+`noetic-control-room`, for anyone who wants Claude to be the coordinator
+without cloning this repository. It has four skills: brief a worker, check a
+READY pull request and land it, keep the decision desk on GitHub Issues, and
+start a Claude Code cloud worker. It has no hooks and no servers, and it
+sends data only to GitHub (through `git` and `gh`) and, for a brief, to your
+own Claude Code cloud session. To try it from a clone:
+
+    claude --plugin-dir ./plugin
+
+What it contains, how it is checked and how it is submitted to Anthropic's
+plugin directory: [`docs/plugin.md`](docs/plugin.md).
+
 ## Status
 
 Early. The protocol and prompts are in daily use; the scripts and runners are
