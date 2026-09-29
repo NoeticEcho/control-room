@@ -42,6 +42,9 @@ release.
    for the owner becomes a desk card; the worker gets its next brief, which
    opens with what landed and what became of its findings.
 
+A real worker session going through these steps, command by command:
+[`examples/end-to-end/transcript.md`](../examples/end-to-end/transcript.md).
+
 ## The lines
 
 ```text

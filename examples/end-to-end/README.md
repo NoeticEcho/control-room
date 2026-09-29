@@ -59,12 +59,20 @@ The toy repository is not published: the pull request URL in the READY line
    writes it into [`desk-answered.json`](7-desk/desk-answered.json). The
    answer then goes into the worker's next brief for wc-3.2.
 
+## A real run: wc-3.2
+
+[`transcript.md`](transcript.md) records a real worker session doing the next
+child, wc-3.2, with the owner's answer. It shows each command and its output:
+the brief, the branch, the handoff, the failing test, the change, the recorded
+check, the READY line, and the lander's checks. It is recorded, not replayed.
+
 ## Checked by `make check`
 
 `tests/examples.bats`:
 
-- replays the epic and compares every file with the ones here. Only the
-  measured `seconds` are ignored, since a check takes as long as it takes.
+- replays the epic and compares every file with the ones here, except the
+  transcript, which the replay does not write. Only the measured `seconds`
+  are ignored, since a check takes as long as it takes.
 - runs `scripts/validate-handoff` on both handoffs;
 - checks the desk files against `desk/desk.schema.json`;
 - checks the pieces agree:
