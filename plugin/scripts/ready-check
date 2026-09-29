@@ -1,0 +1,163 @@
+#!/bin/sh
+# ready-check: the mechanical half of the landing checklist, for one pull
+# request whose worker wrote `EPIC <id> READY <sha> <url>`.
+#
+#   ready-check [--remote <name>] [--base <branch>] [--scope <pattern>]...
+#               [--fence <pattern>]... <READY sha> <branch>
+#
+# It reads the refs the last `git fetch` left and changes nothing: no fetch,
+# no merge, no push, no network. It says, one line each:
+#   - whether the READY sha is already on <remote>/<base> (exit 3: land
+#     nothing);
+#   - whether <remote>/<branch> still ends at the READY sha, and when it has
+#     moved on, whether the later commits only merged <base> (then land the
+#     READY sha) or changed something nobody checked (ask for a new READY);
+#   - each changed file outside every --scope pattern, and each one that
+#     matches a --fence pattern (a path that decides what "the checks passed"
+#     means; it lands only with the person's quoted approval);
+#   - whether the READY sha merges into <remote>/<base> without a conflict;
+#   - how many landings <base> has had since the branch left it.
+#
+# Patterns are shell patterns matched against the whole path, where * also
+# matches /: `src/*` covers src/a/b.c. Defaults: --remote origin, --base main.
+#
+# Exit: 0 nothing found; 1 something to act on (each line starts FINDING);
+# 2 usage or a git error; 3 already landed.
+#
+# Dependencies: POSIX sh, git 2.38 or later (merge-tree --write-tree).
+
+set -u
+
+die() {
+	printf 'ready-check: %s\n' "$1" >&2
+	exit 2
+}
+
+usage() {
+	sed -n '5,6p' "$0" | sed 's/^# \{0,1\}//' >&2
+	exit 2
+}
+
+remote=origin base=main scope='' fence='' nl='
+'
+while [ $# -gt 0 ]; do
+	case $1 in
+	--remote | --base | --scope | --fence)
+		[ $# -ge 2 ] || die "$1 needs a value"
+		case $1 in
+		--remote) remote=$2 ;;
+		--base) base=$2 ;;
+		--scope) scope=$scope$2$nl ;;
+		--fence) fence=$fence$2$nl ;;
+		esac
+		shift 2
+		;;
+	-h | --help) usage ;;
+	--) shift; break ;;
+	-*) die "unknown option $1" ;;
+	*) break ;;
+	esac
+done
+[ $# -eq 2 ] || usage
+ready=$1 branch=$2
+
+git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
+case $ready in
+*[!0-9a-f]* | '') die "the READY sha must be the full 40-character sha, in lowercase" ;;
+esac
+[ ${#ready} -eq 40 ] || die "the READY sha must be the full 40-character sha, in lowercase"
+git cat-file -e "$ready^{commit}" 2>/dev/null ||
+	die "$ready is not a commit here: git fetch $remote first"
+base_ref=$remote/$base branch_ref=$remote/$branch
+base_sha=$(git rev-parse --verify --quiet "$base_ref^{commit}") ||
+	die "no $base_ref: git fetch $remote first"
+head=$(git rev-parse --verify --quiet "$branch_ref^{commit}") ||
+	die "no $branch_ref: git fetch $remote first"
+
+findings=0
+finding() {
+	printf 'FINDING %s\n' "$1"
+	findings=$((findings + 1))
+}
+
+# matches <path> <patterns, one per line>
+matches() {
+	path=$1
+	printf '%s' "$2" | {
+		while IFS= read -r pattern; do
+			[ -n "$pattern" ] || continue
+			# shellcheck disable=SC2254 # the pattern is meant to match
+			case $path in $pattern) exit 0 ;; esac
+		done
+		exit 1
+	}
+}
+
+# Already landed: nothing else matters.
+if git merge-base --is-ancestor "$ready" "$base_sha"; then
+	printf 'ready-check: %s is already on %s: land nothing\n' "$ready" "$base_ref"
+	exit 3
+fi
+
+# The head.
+if [ "$head" = "$ready" ]; then
+	printf 'ok: %s ends at the READY sha\n' "$branch_ref"
+elif ! git merge-base --is-ancestor "$ready" "$head"; then
+	finding "$ready is not on $branch_ref (its head is $head): ask the worker which sha is ready"
+else
+	later=$(git rev-list --count "$ready..$head")
+	with_ready=$(git merge-tree --write-tree "$base_sha" "$ready" 2>/dev/null | sed -n 1p)
+	with_head=$(git merge-tree --write-tree "$base_sha" "$head" 2>/dev/null | sed -n 1p)
+	if [ -n "$with_ready" ] && [ "$with_ready" = "$with_head" ]; then
+		printf 'ok: %s moved %s commit(s) past READY, but they only merged %s: land the READY sha, then close the pull request by hand with a note\n' \
+			"$branch_ref" "$later" "$base"
+	else
+		finding "$branch_ref moved $later commit(s) past READY and they change the tree: land nothing from it until the worker writes a new READY line"
+	fi
+fi
+
+# The files the epic changed, from where it left the base.
+fork=$(git merge-base "$base_sha" "$ready") || die "$ready and $base_ref share no history"
+files=$(git -c core.quotePath=false diff --name-only "$fork" "$ready") || die "git diff failed"
+count=0 outside=0
+while IFS= read -r file; do
+	[ -n "$file" ] || continue
+	count=$((count + 1))
+	if [ -n "$fence" ] && matches "$file" "$fence"; then
+		finding "fenced: $file changed; it lands only with the person's quoted approval"
+	fi
+	if [ -n "$scope" ] && ! matches "$file" "$scope"; then
+		finding "outside scope: $file"
+		outside=$((outside + 1))
+	fi
+done <<EOF
+$files
+EOF
+if [ -z "$scope" ]; then
+	printf 'info: %s file(s) changed; no --scope given, so none was checked against the brief\n' "$count"
+elif [ "$outside" -eq 0 ]; then
+	printf 'ok: %s file(s) changed, all inside the scope\n' "$count"
+fi
+
+# The merge.
+if conflicts=$(git merge-tree --write-tree --name-only "$base_sha" "$ready" 2>/dev/null); then
+	printf 'ok: the READY sha merges into %s without a conflict\n' "$base_ref"
+else
+	status=$?
+	[ "$status" -eq 1 ] || die "git merge-tree --write-tree failed (git 2.38 or later is needed)"
+	finding "the READY sha conflicts with $base_ref in: $(printf '%s\n' "$conflicts" | sed -n '2,/^$/p' | sed '/^$/d' | tr '\n' ' ')"
+fi
+
+# How far behind.
+behind=$(git rev-list --count --first-parent "$fork..$base_sha")
+if [ "$behind" -le 1 ]; then
+	printf 'info: the branch left %s %s landing(s) ago\n' "$base_ref" "$behind"
+else
+	printf 'info: the branch left %s %s landings ago: run the full check on the merge, not only the pull request'\''s CI\n' "$base_ref" "$behind"
+fi
+
+if [ "$findings" -gt 0 ]; then
+	printf 'ready-check: %s finding(s): act on each before landing\n' "$findings"
+	exit 1
+fi
+printf 'ready-check: nothing found; go on with the checklist (read, merge --no-ff, check, push, CI)\n'
