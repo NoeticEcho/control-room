@@ -1,0 +1,85 @@
+#!/bin/sh
+# preflight: say what `make check` needs and this machine lacks, before the
+# suites fail on it one test at a time.
+#
+#   scripts/preflight          one line per missing tool or module, with how
+#                              to install it; exit 1 if any, 0 if none
+#
+# It checks what the lint and the suites use: shellcheck, bats (1.5.0 or
+# later), bash, jq, git, flock, timeout, python3 with the jsonschema module,
+# and node (18 or later, for `node --test`). With CR_REQUIRE_E2B_SDK set (as
+# in CI), also python3's e2b module.
+#
+# Dependencies: POSIX sh, sed.
+
+set -u
+
+missing=0
+
+lack() { # <what> <how to get it>
+	printf 'preflight: missing %s: %s\n' "$1" "$2"
+	missing=$((missing + 1))
+}
+
+old() { # <what> <version found> <version needed> <how to get it>
+	printf 'preflight: %s %s is too old, need %s or later: %s\n' "$1" "$2" "$3" "$4"
+	missing=$((missing + 1))
+}
+
+have() {
+	command -v "$1" >/dev/null 2>&1
+}
+
+# at_least <version> <minimum>: both as dotted numbers
+at_least() {
+	v=$1 m=$2
+	while [ -n "$m" ]; do
+		vh=${v%%.*} mh=${m%%.*}
+		vh=${vh:-0}
+		case $vh in *[!0-9]*) vh=0 ;; esac
+		[ "$vh" -gt "$mh" ] && return 0
+		[ "$vh" -lt "$mh" ] && return 1
+		case $v in *.*) v=${v#*.} ;; *) v= ;; esac
+		case $m in *.*) m=${m#*.} ;; *) m= ;; esac
+	done
+	return 0
+}
+
+pkg='your package manager, e.g. apt-get install'
+
+have shellcheck || lack shellcheck "$pkg shellcheck (https://www.shellcheck.net)"
+if have bats; then
+	version=$(bats --version 2>/dev/null | sed -n 's/^Bats \([0-9.]*\).*/\1/p')
+	at_least "${version:-0}" 1.5.0 ||
+		old bats "${version:-(unknown)}" 1.5.0 "$pkg bats, or https://github.com/bats-core/bats-core"
+else
+	lack bats "$pkg bats, or https://github.com/bats-core/bats-core (1.5.0 or later)"
+fi
+have bash || lack bash "$pkg bash (bats and the guard's bash run need it)"
+have jq || lack jq "$pkg jq (https://jqlang.org)"
+have git || lack git "$pkg git"
+have flock || lack flock "flock(1) from util-linux: $pkg util-linux (scripts/land-lock and its tests)"
+have timeout || lack timeout "timeout(1) from GNU coreutils: $pkg coreutils (ci/local-ci and its tests)"
+if have python3; then
+	python3 -c 'import jsonschema' >/dev/null 2>&1 ||
+		lack "the Python module jsonschema" "pip install jsonschema, or $pkg python3-jsonschema (scripts/validate-handoff)"
+	if [ -n "${CR_REQUIRE_E2B_SDK:-}" ]; then
+		python3 -c 'import e2b' >/dev/null 2>&1 ||
+			lack "the Python module e2b (CR_REQUIRE_E2B_SDK is set)" "pip install e2b (the e2b runner's contract test)"
+	fi
+else
+	lack python3 "$pkg python3, then pip install jsonschema"
+fi
+if have node; then
+	version=$(node --version 2>/dev/null | sed -n 's/^v\([0-9.]*\).*/\1/p')
+	at_least "${version:-0}" 18 ||
+		old node "${version:-(unknown)}" 18 "https://nodejs.org (the desk page's test uses node --test)"
+else
+	lack node "https://nodejs.org, 18 or later (the desk page's test uses node --test)"
+fi
+
+if [ "$missing" -gt 0 ]; then
+	printf 'preflight: %s missing; make check would fail on it. Install, then run make check again.\n' "$missing"
+	exit 1
+fi
+echo "preflight: ok"
