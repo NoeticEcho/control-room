@@ -32,6 +32,16 @@ is local-ci.
 - **Pull requests:** `local-ci poll --prs` checks open pull requests from the
   same repository too, when the machine has room. It takes nothing from a
   fork.
+- **Several landings, one check.** When the coordinator lands several ready
+  pull requests together (`docs/protocol.md`, "Several ready pull requests,
+  one heavy check"), local-ci checks the last merge. That verdict covers
+  them all. If it is red, the coordinator finds which merge broke it and
+  returns that epic.
+- **Deploy and health.** Every landing is deployed to the test environment,
+  and its health is checked. Make both part of the configured `check`, for
+  example `make check && ./deploy-test && ./health-test`. That way the one
+  status local-ci posts on the commit says whether the landing is built,
+  deployed and alive. Red means revert and return, as above.
 
 ## Setting it up
 

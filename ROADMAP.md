@@ -127,3 +127,22 @@ A coordinator that runs on a schedule, and starts every run with no memory
 ## CR-8: an end-to-end transcript
 
 - `examples/end-to-end/transcript.md`: wc-3.2 run by a real worker session, from the brief to the lander's checks, every command with its real output (#8).
+
+## CR-9: the coordinator's hands
+
+- The coordinator creates cloud workers itself, once the owner authorises it:
+  - a one-off routine with a persistent session;
+  - `cr-cloud new` prints the routine's body from
+    `runners/claude-code-cloud/new-worker.routine.json`, and the
+    coordinator's session submits it;
+  - no token passes through any file.
+- A model and an effort for each epic, stated in the brief.
+- A failed send is said to the owner at once (`cr-cloud brief` exits 3).
+- Landing as fast as it is safe:
+  - ready on READY, or after 10 quiet minutes;
+  - several pull requests share one heavy check;
+  - append-only conflicts resolved by keeping both sides;
+  - deploy, health and a commit status after each landing.
+- The loop archives its own old sessions, and writes one journal line per
+  action.
+- The product can serve as the desk for the client's people.

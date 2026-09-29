@@ -2,6 +2,8 @@ EPIC <id>: branch <prefix>/<id>-<slug>, scope and grants below.
 
 This brief is for profile `<profile>`. If your profile is not `<profile>`, reply `BRIEF MISROUTED`, change nothing, and wait.
 
+Model: <model>. Effort: <low | medium | high>. <If your session runs another model, or your effort is not this, say so in your first reply, and work at this effort.>
+
 ## What landed since your last epic
 <one or two lines: the merge commit, and what became of each of your findings>
 

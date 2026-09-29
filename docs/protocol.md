@@ -7,13 +7,16 @@ Remove one boundary and within a week there are two copies of the tracker,
 someone else's half-finished work in your commit, or an unchecked branch in a
 release.
 
-- **Owner.** Decides on the desk. Creates cloud environments and sessions.
-  Grants access to outside services. Secrets never go into a chat, the
-  repository or a worker's environment.
+- **Owner.** Decides on the desk. Creates cloud environments. Grants access
+  to outside services. Authorises the coordinator once to create worker
+  sessions, or creates them. Secrets never go into a chat, the repository or
+  a worker's environment.
 - **Coordinator.** A local session. The only writer of the task tracker. The
-  only one who merges into the integration branch. Briefs workers, keeps the
-  desk, reminds the owner of cards waiting more than an hour, cuts releases
-  when asked.
+  only one who merges into the integration branch. Creates worker sessions
+  when the owner has authorised it (see
+  [`runners/claude-code-cloud/`](../runners/claude-code-cloud/README.md)),
+  briefs workers, keeps the desk, reminds the owner of cards waiting more
+  than an hour, cuts releases when asked.
 - **Worker.** One session per *profile* — a direction of work with its own
   paths and dependencies (`backend`, `mobile`, `docs`, …). A good profile
   answers "whose files are these?". Two profiles that keep editing the same
@@ -25,7 +28,8 @@ release.
    acceptance criterion that can fail. Its assignee is a profile.
 2. **The brief** (coordinator → worker): one message of a fixed shape —
    epic, branch, scope (paths the worker may change), grants (one-off
-   permission on paths it normally may not), why, and how it is accepted.
+   permission on paths it normally may not), why, how it is accepted, and
+   the model and effort it should run with (below).
 3. **Branch and handoff** (worker): a branch from the fresh integration
    branch, and `handoff/<epic>.json` at `working` in the first commit. From
    then on, push every turn: a cloud machine can restart at any moment.
@@ -97,10 +101,60 @@ check script, the policy files. List them. A change to a fenced path lands
 only with the owner's quoted approval — **the coordinator's own changes
 included**.
 
+## Model and effort
+
+The coordinator picks a model and an effort level for each epic, when it
+creates a worker and when it writes a brief, to spend the limits where they
+buy something:
+
+- **The strongest model at high effort** (an Opus-class model, `high`) for
+  long-horizon work, architecture, security-sensitive guards and hard
+  merges.
+- **A fast model at medium effort** (a Sonnet-class model, for example
+  `claude-sonnet-5-5`, `medium`, or `high` when the epic is harder) for
+  well-specified epics: UI polish, CRUD, tests, docs.
+
+The brief states both, and the coordinator's state file records them for
+each worker. How a runner sets them:
+
+- **Claude Code, local:** `claude --model <model> --effort <level>`, for
+  example through `CR_AGENT_ARGS` for `cr-worker` (both flags are in the CLI
+  reference, <https://code.claude.com/docs/en/cli-reference>).
+- **Claude Code cloud:** the model is set when the session is created (the
+  routine's `session_context.model`). A cloud session accepts `/model <name>`
+  and `/effort <level>` typed as a message (the documentation's "Manage
+  context" section of claude-code-on-the-web, Claude Code v2.1.205 or later).
+  Whether `/effort` also takes effect when it is sent with `claude -p
+  --cloud` is not documented, and has not been tried. So the brief always
+  says the effort in words, and the worker applies it.
+- **Other runners:** where the runner cannot set them, the brief asks for them
+  in words.
+
+## Delivery that failed is said at once
+
+A brief or a question that did not reach the worker is the owner's to know
+first. `cr-cloud brief` exits 3 when the send was not delivered: the session
+expired or was archived, or the CLI needs `/login`. The coordinator puts that
+as the **first line** of its next report to the owner, with the session's
+link. It does not wait on it silently, and it does not re-send in a loop.
+
+The common trap is a CLI signed in with an API key. It cannot reach cloud
+sessions: `claude --cloud` then fails with `Unable to get organization UUID`,
+or says API-key authentication is not sufficient. The fix is `/login`, or
+`claude auth login`, with the claude.ai account
+(<https://code.claude.com/docs/en/claude-code-on-the-web>, read 2026-09-29).
+
 ## Landing checklist
 
-1. The branch head equals the READY sha. The handoff is `ready`; its recorded
-   check passed at that sha or its parent (only handoff and run files after).
+A pull request is **ready to land** when the worker's last line or a comment
+on it says `EPIC <id> READY <sha> <url>`. It is also ready when it is open,
+not a draft, mergeable, and has had no push for ten minutes: some workers
+end a turn without the line. In that case the head at that moment is the sha
+that lands.
+
+1. The branch head equals the READY sha. The handoff is `ready`, where the
+   project uses handoffs, and its recorded check passed at that sha or its
+   parent (only handoff and run files after).
 2. The changed files are inside the brief's scope; grants were used only as
    granted.
 3. Read what is security-sensitive: access policies, escaping of user text,
@@ -114,7 +168,37 @@ included**.
 6. Push with an explicit refspec, retrying on network errors.
 7. Read the real CI run for the pushed sha. A green local run is not green CI.
    If it is red, revert and return the epic.
-8. Close, file, export the tracker, brief the next epic.
+8. Deploy the pushed sha to the test environment, check its health, and post
+   the result as a commit status (`ci/local-ci` posts statuses; see
+   `docs/local-ci.md`). A failed deploy or health check is a red landing:
+   revert and return the epic.
+9. Close, file, export the tracker, brief the next epic.
+
+### Several ready pull requests, one heavy check
+
+When several pull requests are ready at once, they can share one full check:
+
+1. In the throwaway checkout, merge each one `--no-ff`, in order: one merge
+   commit per epic, each still checked against steps 1 to 3.
+2. Run the full check once, on the last merge.
+3. If it passes, push them all together and go on with steps 7 to 9.
+4. If it fails, find the merge that broke it: run the check at each merge
+   commit in turn. Return that epic, drop its merge and every merge after
+   it, re-merge the others, and check again.
+
+### Conflicts
+
+- **Append-only conflicts** are the coordinator's to resolve by keeping both
+  sides. Examples: two blocks added at the end of one stylesheet, or two
+  settings added to one test helper. The resolution is the concatenation, and
+  the check on the merge proves it.
+- **A conflict in logic** goes back to the worker, and the coordinator does
+  not resolve it. "Merge main" alone is not a brief, so the worker would
+  answer it as a question and change nothing. Send it in the brief's shape,
+  for the same epic and branch:
+
+      EPIC <id>: branch <branch>, scope as before. Merge <integration branch>
+      into your branch, resolve the conflict, run the full check, end READY.
 
 ## A silent worker
 
