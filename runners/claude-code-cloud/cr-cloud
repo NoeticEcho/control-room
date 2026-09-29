@@ -1,22 +1,35 @@
 #!/bin/sh
-# cr-cloud: brief control-room workers running as Claude Code cloud sessions.
+# cr-cloud: create and brief control-room workers running as Claude Code cloud
+# sessions.
 #
 #   cr-cloud opening <profile>                  print the opening message for a
 #                                               new worker session, filled in
+#   cr-cloud new <profile> <brief.md> --environment <id> --repository <url>
+#                --model <model> [--at <UTC time>] [--name <name>]
+#                                               print the body of a one-off
+#                                               routine that creates the worker
 #   cr-cloud brief <session> <brief.md>         deliver a brief to a running
 #                                               session, as a user message
 #
 # <session> is the session's id (session_..., cse_...) or its claude.ai/code
-# URL. `brief` runs `claude -p "$(cat brief.md)" --cloud <session>`, which
-# queues the message into the session and exits (code.claude.com/docs/en/
-# claude-code-on-the-web, "Send follow-ups from the CLI"). It needs the CLI
-# signed in with `claude auth login` to the account that owns the session.
+# URL. `brief` runs `claude -p "$(cat brief.md)" --cloud <session>
+# --output-format json`, which queues the message into the session and exits
+# (code.claude.com/docs/en/claude-code-on-the-web, "Send follow-ups from the
+# CLI"). A send that fails exits 3 and says so. The CLI must be signed in with
+# `claude auth login` to the account that owns the session, not an API key.
+#
+# `new` only prints JSON: the coordinator's own session submits it with its
+# routine tool, under the owner's sign-in. cr-cloud holds no token and asks
+# for none (runners/claude-code-cloud/README.md, "The coordinator creates the
+# worker").
 #
 # Environment: CR_AGENT (default: claude); CR_OPENING (default:
-# prompts/en/worker-opening.md in this kit). Reads integration_branch from
+# prompts/en/worker-opening.md in this kit); CR_ROUTINE (default:
+# new-worker.routine.json next to this script); CR_PREAMBLE (default:
+# routine-preamble.md next to this script). Reads integration_branch from
 # control-room.json at the repository root when there is one (default main).
 #
-# Dependencies: POSIX sh; jq only to read control-room.json.
+# Dependencies: POSIX sh; jq for `new`, `brief` and control-room.json.
 
 set -eu
 
@@ -28,14 +41,18 @@ die() {
 }
 
 usage() {
-	sed -n '4,8p' "$0" | sed 's/^# \{0,1\}//' >&2
+	sed -n '5,13p' "$0" | sed 's/^# \{0,1\}//' >&2
 	exit 2
+}
+
+need_jq() {
+	command -v jq >/dev/null 2>&1 || die "jq is needed for $1" 69
 }
 
 integration() {
 	root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo main; return; }
 	if [ -f "$root/control-room.json" ]; then
-		command -v jq >/dev/null 2>&1 || die "jq is needed to read $root/control-room.json"
+		need_jq "$root/control-room.json"
 		jq -er '.integration_branch // "main" | strings' "$root/control-room.json" 2>/dev/null ||
 			die "$root/control-room.json is not valid"
 	else
@@ -58,11 +75,13 @@ replace() {
 	printf '%s' "$out$text"
 }
 
-cmd_opening() {
-	[ $# -eq 1 ] || usage
+check_profile() {
 	case $1 in
 	'' | [!a-z]* | *[!a-z0-9-]*) die "profile '$1' must match ^[a-z][a-z0-9-]*\$" 2 ;;
 	esac
+}
+
+opening_text() {
 	file=${CR_OPENING:-$here/../../prompts/en/worker-opening.md}
 	[ -f "$file" ] || die "no opening message at $file"
 	branch=$(integration)
@@ -70,7 +89,89 @@ cmd_opening() {
 	text=$(replace "$text" '<profile>' "$1")
 	text=$(replace "$text" '<integration-branch>' "$branch")
 	text=$(replace "$text" '<main-branches>' "$branch")
-	printf '%s\n' "$text"
+	printf '%s' "$text"
+}
+
+# read_brief <file>: the brief's text, refused when missing or empty; warns
+# when it is not in the shape of a brief.
+read_brief() {
+	[ -f "$1" ] || die "no brief at $1" 2
+	brief=$(cat "$1")
+	[ -n "$brief" ] || die "the brief $1 is empty" 2
+	case $brief in
+	'EPIC '*': branch '*) ;;
+	*) printf 'cr-cloud: %s is not a brief (EPIC <id>: branch ...); the worker will answer it as a question\n' "$1" >&2 ;;
+	esac
+}
+
+new_uuid() {
+	# A random (version 4) UUID.
+	od -An -N16 -tx1 /dev/urandom | tr -d ' \n' |
+		sed 's/^\(.\{8\}\)\(.\{4\}\).\(.\{3\}\).\(.\{3\}\)\(.\{12\}\)$/\1-\2-4\3-a\4-\5/'
+}
+
+cmd_opening() {
+	[ $# -eq 1 ] || usage
+	check_profile "$1"
+	opening_text "$1"
+	printf '\n'
+}
+
+cmd_new() {
+	[ $# -ge 2 ] || usage
+	profile=$1 brief_file=$2
+	shift 2
+	env_id='' repo='' model='' at='' name=''
+	while [ $# -gt 0 ]; do
+		case $1 in
+		--environment | --repository | --model | --at | --name)
+			if [ $# -lt 2 ] || [ -z "$2" ]; then usage; fi
+			case $1 in
+			--environment) env_id=$2 ;;
+			--repository) repo=$2 ;;
+			--model) model=$2 ;;
+			--at) at=$2 ;;
+			--name) name=$2 ;;
+			esac
+			shift 2
+			;;
+		*) usage ;;
+		esac
+	done
+	check_profile "$profile"
+	[ -n "$env_id" ] || die "--environment is required: the cloud environment of the repository, with its setup script" 2
+	[ -n "$repo" ] || die "--repository is required" 2
+	[ -n "$model" ] || die "--model is required: the brief's model (docs/protocol.md, Model and effort)" 2
+	need_jq "new"
+	read_brief "$brief_file"
+	routine=${CR_ROUTINE:-$here/new-worker.routine.json}
+	preamble=${CR_PREAMBLE:-$here/routine-preamble.md}
+	[ -f "$routine" ] || die "no routine template at $routine"
+	[ -f "$preamble" ] || die "no preamble at $preamble"
+	if [ -z "$at" ]; then
+		# Two minutes ahead, in UTC: time for the coordinator to submit it.
+		at=$(jq -rn '(now + 120) | floor | todate')
+	fi
+	case $at in
+	[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]Z) ;;
+	*) die "--at must be a UTC time like 2026-09-29T10:02:00Z, not '$at'" 2 ;;
+	esac
+	if [ -z "$name" ]; then
+		epic=$(printf '%s\n' "$brief" | sed -n '1s/^EPIC \([^:]*\):.*/\1/p')
+		name="worker $profile${epic:+: $epic}"
+	fi
+	message="$(cat "$preamble")
+
+$(opening_text "$profile")
+
+$brief"
+	jq --arg name "$name" --arg at "$at" --arg env "$env_id" --arg model "$model" \
+		--arg repo "$repo" --arg uuid "$(new_uuid)" --arg message "$message" '
+		def fill: {"<name>": $name, "<run-once-at>": $at, "<environment-id>": $env,
+			"<model>": $model, "<repository-url>": $repo, "<event-uuid>": $uuid,
+			"<message>": $message};
+		fill as $f | walk(if type == "string" and $f[.] != null then $f[.] else . end)
+		' "$routine" || die "the routine template $routine is not valid JSON"
 }
 
 cmd_brief() {
@@ -79,20 +180,27 @@ cmd_brief() {
 	case $session in
 	'' | -*) die "'$session' is not a session id or URL" 2 ;;
 	esac
-	[ -f "$2" ] || die "no brief at $2" 2
-	brief=$(cat "$2")
-	[ -n "$brief" ] || die "the brief $2 is empty" 2
-	case $brief in
-	'EPIC '*': branch '*) ;;
-	*) printf 'cr-cloud: %s is not a brief (EPIC <id>: branch ...); the worker will answer it as a question\n' "$2" >&2 ;;
-	esac
-	"${CR_AGENT:-claude}" -p "$brief" --cloud "$session" </dev/null
+	read_brief "$2"
+	need_jq "brief"
+	set +e
+	result=$("${CR_AGENT:-claude}" -p "$brief" --cloud "$session" --output-format json </dev/null)
+	status=$?
+	set -e
+	if printf '%s' "$result" | jq -e '.ok == true' >/dev/null 2>&1; then
+		printf 'cr-cloud: delivered to %s\n' "$(printf '%s' "$result" | jq -r '.url // .session_id')"
+		return 0
+	fi
+	reason=$(printf '%s' "$result" | jq -r 'select(.ok == false) | .error // "no reason given"' 2>/dev/null || true)
+	[ -n "$reason" ] || reason="the CLI exited $status without a delivery result"
+	printf 'cr-cloud: NOT delivered to %s: %s\n' "$session" "$reason" >&2
+	printf 'cr-cloud: tell the owner first, with the session link. If it says expired, needs /login or "organization UUID", the CLI must be signed in with the claude.ai account (claude auth login), not an API key.\n' >&2
+	exit 3
 }
 
 [ $# -gt 0 ] || usage
 command=$1
 shift
 case $command in
-opening | brief) "cmd_$command" "$@" ;;
+opening | new | brief) "cmd_$command" "$@" ;;
 *) usage ;;
 esac
