@@ -83,3 +83,8 @@ EOF
 			{ echo "no case fires $(basename "$skill")"; return 1; }
 	done
 }
+
+@test "the runner is plain POSIX sh and passes shellcheck" {
+	[ "$(sed -n 1p "$RUN")" = "#!/bin/sh" ]
+	shellcheck "$RUN"
+}

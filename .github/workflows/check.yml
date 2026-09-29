@@ -27,3 +27,19 @@ jobs:
         env:
           CR_REQUIRE_E2B_SDK: "1"
         run: make check
+
+  plugin:
+    # The Claude plugin in plugin/ (docs/plugin.md). `claude plugin validate`
+    # checks the manifest and each skill's frontmatter, and needs no sign-in.
+    # Claude Code is pinned; raise it on purpose, not by drift.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Install Claude Code
+        run: npm install -g --no-fund --no-audit @anthropic-ai/claude-code@2.1.285
+      - name: claude plugin validate
+        run: |
+          claude --version
+          claude plugin validate ./plugin --strict
