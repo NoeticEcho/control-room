@@ -51,7 +51,7 @@ Once it is listed in Anthropic's plugin directory, add it from
   opening message, the licence) differs from its original. Change the
   original, then copy it.
 - **The version** in `plugin/.claude-plugin/plugin.json` starts at the
-  repository's release (0.2.1) and is raised with every release; the tests
+  repository's release (0.3.0) and is raised with every release; the tests
   fail when it is behind the latest `v*` tag.
 - **The directory's checks** that can be checked here are in
   `tests/plugin.bats`: the manifest, no hooks or servers, regular files

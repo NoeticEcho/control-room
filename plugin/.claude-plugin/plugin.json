@@ -1,7 +1,7 @@
 {
   "name": "noetic-control-room",
   "displayName": "control-room",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "One person, one AI coordinator, many AI coding agents. Skills for the coordinator: brief a worker in the fixed shape, check a READY pull request and land it, keep a decision desk of what only the person can decide, and start a Claude Code cloud worker.",
   "author": {
     "name": "NoeticEcho",
