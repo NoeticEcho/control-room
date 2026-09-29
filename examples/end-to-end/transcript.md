@@ -540,7 +540,7 @@ $ git fetch -q origin claude/wc-3-unicode-spaces
    and `run-wc-3-2`, and files the `discovered` item (awks other than mawk
    unverified) as a task.
 
-## 9. CR-8 itself: the check, and what stops it
+## 9. CR-8 itself: the check, what stopped it, and the fix
 
 This file is CR-8's work, on control-room's branch
 `claude/cr-8-e2e-transcript`. Before READY, `CLAUDE.md` asks for a merge of
@@ -566,6 +566,45 @@ scope*.
 
 That is the one real gap in control-room this run found: the replay test
 leaves no room for anything recorded rather than replayed, which is what
-issue #8 asks for. The result of `make check` on the final branch, and CR-8's
-own last line (READY or BLOCKED), are in the pull request. A file cannot hold
-the sha of the commit that contains it.
+issue #8 asks for.
+
+### What happened next
+
+1. **BLOCKED.** The worker pushed the transcript, opened the pull request with
+   the proposed line, and ended its turn with:
+
+   ```text
+   EPIC CR-8 BLOCKED make check fails: tests/examples.bats (outside scope) compares every file in examples/end-to-end/ with the replay, so the required transcript.md fails it; grant one condition, `! -name transcript.md` in normalized() (patch in PR #11), and it passes
+   ```
+
+   CI on the pull request failed on that test and no other.
+2. **A status question.** About four hours later the coordinator asked whether
+   the worker was working or blocked. The message named the two fixes, but it
+   called itself "a status question (not a brief)". The worker's protocol
+   answers a question and changes nothing, so the worker answered "blocked",
+   said what brief would unblock it, and did not commit.
+3. **A pause.** The coordinator then paused all work on this repository. The
+   worker's tree was clean and already pushed. It replied with one line and
+   waited:
+
+   ```text
+   PAUSED CR-8 99ca68c676743ee4011a2b54670a81227cd3ed7c
+   ```
+
+4. **The grant.** The RESUME message repeated this brief, and it told the
+   worker to "fix the red check": "Either exclude it from that comparison
+   (and say why in the test) or move it out of the compared tree". The brief
+   fixes the transcript's path, so the worker excluded the file and wrote the
+   reason into the test:
+
+   ```text
+   $ bats -f 'replay:' tests/examples.bats
+   not ok 1 replay: replaying the epic gives exactly the files in the example
+   # Only in /tmp/bats-run-<id>/test/1/norm-end-to-end: transcript.md
+   $ # add `! -name transcript.md` to normalized(), and the comment
+   $ bats -f 'replay:' tests/examples.bats
+   ok 1 replay: replaying the epic gives exactly the files in the example
+   ```
+
+The result of `make check` on the final branch, and CR-8's last line, are in
+the pull request. A file cannot hold the sha of the commit that contains it.

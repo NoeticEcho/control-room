@@ -9,11 +9,13 @@ ROOT="$BATS_TEST_DIRNAME/.."
 EX="$ROOT/examples/end-to-end"
 
 # normalized <dir>: a copy of the example's files with the measured seconds
-# set to 0, in $BATS_TEST_TMPDIR/norm-<name>
+# set to 0, in $BATS_TEST_TMPDIR/norm-<name>. Left out: the README and
+# replay.sh, which describe the replay, and transcript.md, which records a
+# real worker session (CR-8, #8) rather than anything the replay writes.
 normalized() {
 	dest="$BATS_TEST_TMPDIR/norm-$(basename "$1")"
 	mkdir -p "$dest"
-	(cd "$1" && find . -type f ! -name README.md ! -name replay.sh) | while read -r f; do
+	(cd "$1" && find . -type f ! -name README.md ! -name replay.sh ! -name transcript.md) | while read -r f; do
 		mkdir -p "$dest/$(dirname "$f")"
 		case $f in
 		*.json) jq '(.. | objects | select(has("seconds")) | .seconds) |= 0' "$1/$f" >"$dest/$f" ;;

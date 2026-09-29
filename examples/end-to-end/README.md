@@ -70,8 +70,9 @@ check, the READY line, and the lander's checks. It is recorded, not replayed.
 
 `tests/examples.bats`:
 
-- replays the epic and compares every file with the ones here. Only the
-  measured `seconds` are ignored, since a check takes as long as it takes.
+- replays the epic and compares every file with the ones here, except the
+  transcript, which the replay does not write. Only the measured `seconds`
+  are ignored, since a check takes as long as it takes.
 - runs `scripts/validate-handoff` on both handoffs;
 - checks the desk files against `desk/desk.schema.json`;
 - checks the pieces agree:
