@@ -200,6 +200,54 @@ When several pull requests are ready at once, they can share one full check:
       EPIC <id>: branch <branch>, scope as before. Merge <integration branch>
       into your branch, resolve the conflict, run the full check, end READY.
 
+### Clean merges that are still wrong
+
+Every merge can be clean, and every branch green, and the merged tree still
+be broken. Three cases:
+
+- **Generated artefacts.** Several landed branches each regenerated the same
+  generated file: a schema snapshot, a lockfile, a generated API client.
+  Each one was right on its own branch. On the merged tree the file is
+  stale, even when git merged it without a conflict, because it was made
+  from each branch's input, never from all of them together. After the
+  last merge, and before the check:
+  - regenerate it once on the merged tree, with the project's own
+    generator, and commit that as the coordinator's own commit in the
+    landing;
+  - never merge it by hand, taking lines from each side;
+  - never add a new migration (or its equivalent) to paper over a snapshot
+    that disagrees: the drift is in the file, not in the model. If the
+    regenerated file needs one, the branches disagree in logic, and that is
+    a logic conflict, returned as above.
+
+  Then run the full check on that commit.
+- **An append-only resolution is then built.** Keeping both sides is right,
+  but a hand resolution can still drop a line. Two blocks added at the end
+  of one stylesheet, joined by hand, lost a closing brace. Every test
+  passed, because no test built the stylesheet, and the next two deploys
+  failed on it. So the check before a push must build what the release
+  builds (the stylesheet, the bundle, the image, the documentation site),
+  not only run the tests. If the project's check does not, add the build to
+  it; until then, run the release build on the merge yourself before
+  pushing.
+- **A pull request that moved after its READY line.** A worker may merge
+  the integration branch into its branch after it wrote READY. The READY
+  sha is what the worker checked, so land that sha, not the later head. The
+  pull request then stays open on the later head. If merging that head
+  would leave the integration branch's tree the same (nothing but the merge
+  came after READY), close the pull request by hand, with a note such as
+  "Landed at <READY sha> in <merge sha>; the later commits only merged
+  <integration branch>." To check (git 2.38 or later):
+
+      test "$(git merge-tree --write-tree origin/<main> <later head>)" \
+        = "$(git rev-parse 'origin/<main>^{tree}')"
+
+  A plain `git diff <later head> origin/<main>` is not the test: it
+  differs as soon as anything else has landed since. If the merge would
+  change the tree, the later commits changed something nobody checked: ask
+  the worker for a new READY line, and land nothing more from it until
+  then.
+
 ## A silent worker
 
 A worker with no commit on its branch for more than two hours, and no READY

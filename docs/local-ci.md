@@ -43,6 +43,24 @@ is local-ci.
   status local-ci posts on the commit says whether the landing is built,
   deployed and alive. Red means revert and return, as above.
 
+## What the configured check must do
+
+- **Build what the release builds.** Tests that pass prove nothing about a
+  file no test reads. A stylesheet, a bundle, an image or a documentation
+  site that only the release builds can be broken by a clean-looking merge:
+  a closing brace lost while two appended blocks were joined, with every
+  test green. So the configured `check` runs the release build too, for
+  example `make check && make build`, or whatever the release pipeline
+  runs. See `docs/protocol.md`, "Clean merges that are still wrong".
+- **Say what the machine lacks, first.** A workstation is not the hosted
+  runner: a tool or a library module the runner installs may be missing.
+  The suites then fail one test at a time with no reason (dozens of
+  `not ok` lines, while hosted CI is green). Start the check with a
+  preflight that names each missing piece and how to install it, and
+  fails before any suite runs. This repository's own `make check` does
+  that with [`scripts/preflight`](../scripts/preflight); run `make
+  preflight` alone to see the list.
+
 ## Setting it up
 
 1. A checkout that nothing else edits, one per repository. A worktree is

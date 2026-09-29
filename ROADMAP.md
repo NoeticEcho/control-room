@@ -146,3 +146,17 @@ A coordinator that runs on a schedule, and starts every run with no memory
 - The loop archives its own old sessions, and writes one journal line per
   action.
 - The product can serve as the desk for the client's people.
+
+## CR-10: preflight and merge hazards
+
+- `make check` starts with `scripts/preflight`: one line per missing tool or
+  module (jq, shellcheck, bats, bash, git, flock, timeout, node, python3
+  with jsonschema; e2b when `CR_REQUIRE_E2B_SDK` is set), with how to
+  install it, before any suite runs.
+- The landing checklist's "Clean merges that are still wrong":
+  - generated artefacts are regenerated once on the merged tree, never
+    merged by hand, never answered with a new migration;
+  - an append-only resolution is built, and the check before a push builds
+    what the release builds;
+  - a pull request that merged main after its READY line lands at the READY
+    sha, and is closed by hand when nothing else came after.
