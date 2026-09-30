@@ -168,7 +168,7 @@ SPEC_KEYS=" name description license compatibility metadata allowed-tools "
 }
 
 @test "no Liquid tags in the plugin's Markdown or its docs page (the site renders them)" {
-	run grep -rnE '\{\{|\{%' "$PLUGIN" --include='*.md' "$ROOT/docs/plugin.md"
+	run grep -rnE '\{\{|\{%' "$PLUGIN" --include='*.md' "$ROOT"/docs/plugin*.md
 	[ "$status" -eq 1 ]
 }
 
@@ -185,4 +185,104 @@ SPEC_KEYS=" name description license compatibility metadata allowed-tools "
 	echo "$output"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"Validation passed"* ]]
+}
+
+@test "the icon: a square vector SVG of at least 128 px, self-contained, named nowhere in the plugin" {
+	icon="$PLUGIN/.claude-plugin/icon.svg"
+	[ -f "$icon" ]
+	head -c 200 "$icon" | grep -q '^<svg xmlns="http://www.w3.org/2000/svg"'
+	width=$(sed -n 's/^<svg[^>]* width="\([0-9]*\)".*/\1/p' "$icon")
+	height=$(sed -n 's/^<svg[^>]* height="\([0-9]*\)".*/\1/p' "$icon")
+	[ -n "$width" ] && [ "$width" = "$height" ]
+	[ "$width" -ge 128 ]
+	grep -q "viewBox=\"0 0 $width $height\"" "$icon"
+	# Vector only, no embedded raster, script, font or outside reference.
+	run grep -nE '<image|data:|href=|<script|<text|<foreignObject|url\(|@import|on[a-z]+=' "$icon"
+	[ "$status" -eq 1 ]
+	# The checklist holds a plugin that names a bundled image in commands,
+	# scripts or code; nothing needs to.
+	run grep -rn 'icon\.svg' "$PLUGIN" --exclude=icon.svg
+	[ "$status" -eq 1 ]
+}
+
+@test "credentials: the scripts read no variable but their own settings, and nothing in a home directory" {
+	cd "$PLUGIN/scripts"
+	# Every upper-case variable a script expands; lower-case ones are its own.
+	# shellcheck disable=SC2016 # the patterns are literal
+	used=$(grep -ohE '\$\{?[A-Z][A-Z0-9_]*' ./* | tr -d '${' | sort -u | tr '\n' ' ')
+	[ "$used" = "CLAUDE_PLUGIN_ROOT CR_PROFILE GH_DESK_NOW GH_DESK_REPO " ] ||
+		[ "$used" = "CR_PROFILE GH_DESK_NOW GH_DESK_REPO " ] || { echo "reads: $used"; return 1; }
+	# shellcheck disable=SC2016,SC2088 # the patterns are literal
+	run grep -nE '~/|\$HOME|\.config/|\.netrc|\.git-credentials|hosts\.yml|auth (token|status)|gh auth|curl |wget ' ./*
+	[ "$status" -eq 1 ]
+	# ready-check needs no sign-in: it runs neither gh nor anything on the network.
+	# (Comments and the messages that tell the user to fetch do not count.)
+	run sh -c "grep -vE '^[[:space:]]*#|die \"|finding \"|printf ' ready-check |
+		grep -nwE 'gh|curl|wget|ssh|git (fetch|push|pull|ls-remote|clone)'"
+	[ "$status" -eq 1 ]
+}
+
+@test "credentials: with canary tokens in the environment, no script passes one to gh or prints it" {
+	bin="$BATS_TEST_TMPDIR/bin"
+	mkdir -p "$bin"
+	cat >"$bin/gh" <<'EOS'
+#!/bin/sh
+printf '%s\n' "$*" >>"$GH_LOG"
+case "$*" in *"issue list"*) echo '[]' ;; esac
+EOS
+	chmod +x "$bin/gh"
+	export GH_LOG="$BATS_TEST_TMPDIR/gh.log"
+	canary='canary-f1e2d3c4b5a6'
+	run env PATH="$bin:$PATH" HOME=/nonexistent GH_TOKEN=$canary GITHUB_TOKEN=$canary \
+		GH_DESK_REPO=owner/repo sh "$PLUGIN/scripts/gh-desk"
+	[ "$status" -eq 0 ]
+	[[ "$output" != *"$canary"* ]]
+	run env PATH="$bin:$PATH" HOME=/nonexistent GH_TOKEN=$canary GH_DESK_REPO=owner/repo \
+		sh "$PLUGIN/scripts/gh-desk" labels
+	[ "$status" -eq 0 ]
+	[ -s "$GH_LOG" ]
+	run grep -c "$canary" "$GH_LOG"
+	[ "$output" = 0 ]
+	# Every gh call names the repository it was given, and no other.
+	run grep -vc -- '-R owner/repo$' "$GH_LOG"
+	[ "$output" = 0 ]
+}
+
+@test "the README's Credentials section names each tool that uses a sign-in, and what it sends where" {
+	section=$(awk '/^## Credentials/ { on = 1; next } /^## / { on = 0 } on' "$PLUGIN/README.md")
+	[ -n "$section" ]
+	# shellcheck disable=SC2016 # backticks are Markdown, not commands
+	for needle in '`gh`' '`git push' '`claude -p' 'scripts/gh-desk' 'scripts/ready-check' 'no `userConfig`' 'reads no credential'; do
+		[[ "$section" == *"$needle"* ]] || { echo "Credentials does not say: $needle"; return 1; }
+	done
+	[ "$(jq 'has("userConfig")' "$MANIFEST")" = false ]
+}
+
+@test "the listing links: https, and each page on the docs site is a page in this repository" {
+	site=https://open.noeticecho.space/control-room/
+	for field in homepage documentationUrl supportUrl privacyPolicyUrl termsOfServiceUrl; do
+		url=$(jq -r ".$field // empty | strings" "$MANIFEST")
+		[[ "$url" == https://* ]] || { echo "$field: '$url'"; return 1; }
+		if [[ "$url" == "$site"* ]]; then
+			page=${url#"$site"}
+			[ -f "$ROOT/${page%.html}.md" ] || { echo "$field: no ${page%.html}.md for $url"; return 1; }
+		fi
+	done
+	[ "$(jq -r .documentationUrl "$MANIFEST")" = "$(jq -r .homepage "$MANIFEST")" ]
+	[ "$(jq -r .supportUrl "$MANIFEST")" = https://github.com/NoeticEcho/control-room/issues ]
+	[[ "$(jq -r '.classification | strings' "$MANIFEST")" =~ ^[a-z]+(-[a-z]+)*$ ]]
+}
+
+@test "the privacy and terms pages say what the listing promises, and the docs page says how support works" {
+	privacy=$(tr '\n' ' ' <"$ROOT/docs/plugin-privacy.md")
+	for needle in "collects nothing and sends nothing to NoeticEcho" "no telemetry" "privacy statement" "privacy policy"; do
+		[[ "$privacy" == *"$needle"* ]] || { echo "privacy page does not say: $needle"; return 1; }
+	done
+	terms=$(tr '\n' ' ' <"$ROOT/docs/plugin-terms.md")
+	for needle in "Apache License 2.0" "No warranty" "section 7" "No liability" "section 8" "No service" "the licence is what counts"; do
+		[[ "$terms" == *"$needle"* ]] || { echo "terms page does not say: $needle"; return 1; }
+	done
+	support=$(awk '/^## Support/ { on = 1; next } /^## / { on = 0 } on' "$ROOT/docs/plugin.md")
+	[[ "$support" == *"https://github.com/NoeticEcho/control-room/issues"* ]]
+	[[ "$support" == *"no promised response time"* ]]
 }

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="control-room: one coordinator linked to three workers">
+  <rect width="256" height="256" rx="48" fill="#1f2a37"/>
+  <g stroke="#9fb3c8" stroke-width="10" stroke-linecap="round">
+    <line x1="128" y1="96" x2="64" y2="176"/>
+    <line x1="128" y1="96" x2="128" y2="184"/>
+    <line x1="128" y1="96" x2="192" y2="176"/>
+  </g>
+  <circle cx="128" cy="84" r="30" fill="#f2b84b"/>
+  <circle cx="64" cy="184" r="20" fill="#e6edf3"/>
+  <circle cx="128" cy="192" r="20" fill="#e6edf3"/>
+  <circle cx="192" cy="184" r="20" fill="#e6edf3"/>
+</svg>

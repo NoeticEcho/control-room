@@ -36,15 +36,33 @@ run these commands, in your terminal and with your permission:
 | `git push origin HEAD:refs/heads/<branch>` | Push a landing, after you say yes (or when you told Claude to land ready pull requests) | Your repository's remote (GitHub) |
 | `sh ${CLAUDE_PLUGIN_ROOT}/scripts/ready-check …` | Checks a READY pull request: sha, scope, fenced paths, merge, how far behind | Nowhere: it only reads git |
 | `sh ${CLAUDE_PLUGIN_ROOT}/scripts/gh-desk` and `… gh-desk labels` | Lists desk cards; creates the four desk labels | GitHub, through `gh` |
-| `gh pr diff`, `gh pr checks`, `gh pr close`, `gh run list`, `gh run watch` | Reads a pull request and its CI; closes a pull request with a note | GitHub, through `gh` |
+| `gh pr checks`, `gh pr close`, `gh run list`, `gh run watch` | Reads a pull request's CI; closes a pull request with a note | GitHub, through `gh` |
 | `gh issue create`, `gh issue comment`, `gh issue edit`, `gh issue close` | Writes and closes desk cards | GitHub, through `gh` |
 | `claude -p "<brief>" --cloud <session> --output-format json` | Sends a brief to a worker's cloud session, after you say yes (or when you told Claude to send briefs) | Your own Claude Code cloud session on claude.ai |
 
-`gh` and `claude` use the sign-in you already have; the plugin never reads,
-asks for or stores a token. `scripts/cloud-setup.sh` is a text for you to
-paste into a cloud environment's setup box: it installs `jq` and the Python
-`jsonschema` module there, not on your machine. The plugin needs `git` 2.38 or
-later, and `gh` for the desk and for reading pull requests.
+`scripts/cloud-setup.sh` is a text for you to paste into a cloud
+environment's setup box: it installs `jq` and the Python `jsonschema` module
+there, not on your machine. The plugin needs `git` 2.38 or later, and `gh`
+for the desk and for reading CI.
+
+## Credentials
+
+The plugin reads no credential itself. It has no `userConfig`, asks you for
+no token, stores none, and none of its files reads a token variable, a file
+in your home directory or any tool's configuration. Three commands it runs
+use a sign-in that **you** already set up for that tool, and each sends only
+to your own account:
+
+| What uses a sign-in | Whose sign-in | What it sends, and where |
+|---|---|---|
+| `gh`: `scripts/gh-desk` and the `gh issue …`, `gh pr …`, `gh run …` commands above | The GitHub CLI's own, however you set `gh` up (usually `gh auth login`); the plugin passes it nothing | Desk cards, comments and labels to the issues of the repository you work in; reads of its pull requests and CI runs. Nothing to any other repository or host |
+| `git push origin HEAD:refs/heads/<branch>` | Git's own credential helper for your remote | The landing's merge commit to your repository's remote, only after you say yes |
+| `claude -p … --cloud <session>` | The Claude Code CLI's own: `claude auth login` | The brief's text to your own Claude Code cloud session, only after you say yes |
+
+`scripts/ready-check` needs no sign-in: it reads your local git refs and
+changes nothing. `scripts/gh-desk` cannot work without `gh`, because the desk
+lives in GitHub Issues; the only settings it reads are `GH_DESK_REPO` (which
+repository holds the desk) and `GH_DESK_NOW` (a fixed time, for its tests).
 
 ## The rules it keeps
 

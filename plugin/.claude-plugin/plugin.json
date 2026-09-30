@@ -1,7 +1,7 @@
 {
   "name": "noetic-control-room",
   "displayName": "control-room",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "One person, one AI coordinator, many AI coding agents. Skills for the coordinator: brief a worker in the fixed shape, check a READY pull request and land it, keep a decision desk of what only the person can decide, and start a Claude Code cloud worker.",
   "author": {
     "name": "NoeticEcho",
@@ -9,6 +9,11 @@
   },
   "homepage": "https://open.noeticecho.space/control-room/docs/plugin.html",
   "repository": "https://github.com/NoeticEcho/control-room",
+  "documentationUrl": "https://open.noeticecho.space/control-room/docs/plugin.html",
+  "supportUrl": "https://github.com/NoeticEcho/control-room/issues",
+  "privacyPolicyUrl": "https://open.noeticecho.space/control-room/docs/plugin-privacy.html",
+  "termsOfServiceUrl": "https://open.noeticecho.space/control-room/docs/plugin-terms.html",
   "license": "Apache-2.0",
-  "keywords": ["coordinator", "multi-agent", "pull-requests", "code-review", "workflow"]
+  "keywords": ["coordinator", "multi-agent", "pull-requests", "code-review", "workflow"],
+  "classification": "developer-tools"
 }

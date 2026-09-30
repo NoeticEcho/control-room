@@ -42,9 +42,14 @@ record a passing check at that sha or its parent.
 
 ## 2. Read what is security-sensitive
 
-`gh pr diff <number>` and read, yourself: access rules, escaping of user
-text, configuration, CI files, anything that looks like a secret. A secret
-in the diff is a stop: tell the user, land nothing.
+Read the diff of exactly what lands, the READY sha against the integration
+branch, from the fetch you already made:
+
+    git diff origin/main...<READY sha>
+
+Read it yourself: access rules, escaping of user text, configuration, CI
+files, anything that looks like a secret. A secret in the diff is a stop:
+tell the user, land nothing.
 
 ## 3. Merge in a throwaway checkout
 
