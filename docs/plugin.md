@@ -35,6 +35,51 @@ through `git`, `gh` and, to send a brief to a cloud session, `claude -p
 --cloud`. The plugin's [README](../plugin/README.md) lists each command and
 where it sends data.
 
+## Credentials, for the directory's reviewer
+
+The portal's validation holds the plugin for a reviewer with "Uses a
+credential from the user's machine". What that refers to: the skills run
+`gh`, `git push` and `claude -p --cloud`, and each of those tools uses the
+sign-in its user already set up for it. The plugin itself reads no
+credential: it has no `userConfig`, and no file in it reads a token
+variable, a file in the home directory or a tool's configuration.
+`tests/plugin.bats` checks that, and runs both scripts with canary tokens
+in the environment to show that none reaches `gh`. We keep it this way on
+purpose: a token pasted into `userConfig` would be one more copy of a
+credential that `gh` already holds. The plugin's README has a
+"Credentials" section that says, for each tool, whose sign-in it uses and
+what it sends where.
+
+`scripts/ready-check` needs no sign-in at all. `scripts/gh-desk` cannot do
+without `gh`, because the desk is GitHub Issues. Since 0.3.1 the landing
+skill reads the diff with `git diff` instead of `gh pr diff`, so reading
+what lands needs no sign-in either.
+
+## The icon
+
+`plugin/.claude-plugin/icon.svg`: one coordinator linked to three workers,
+a vector drawing of our own. Where the directory reads a plugin's icon from
+is not in the documentation we found (read 2026-09-30); this is the place
+the portal's "No icon" finding pointed to, and it is unverified until the
+portal validates it.
+
+## Support
+
+Questions, problems and ideas go to the repository's issues:
+<https://github.com/NoeticEcho/control-room/issues>. Say which version of
+the plugin (`plugin/.claude-plugin/plugin.json`) and of Claude Code you
+run, what you asked Claude, and what happened. Issues are read and answered
+by the maintainers as time allows; there is no promised response time and
+no paid support. A fix lands on `main` and reaches the directory with the
+next release.
+
+Security problems: open an issue that says only that you found one, without
+the details, and ask for a private channel.
+
+The plugin's [privacy page](plugin-privacy.md) and
+[terms](plugin-terms.md) are short: it collects nothing, and it comes under
+the Apache-2.0 licence with no warranty.
+
 ## Install it
 
 In Claude Code, from a clone of this repository, for a session:
@@ -50,9 +95,9 @@ Once it is listed in Anthropic's plugin directory, add it from
   carries (`gh-desk`, the setup script, the brief template, the worker's
   opening message, the licence) differs from its original. Change the
   original, then copy it.
-- **The version** in `plugin/.claude-plugin/plugin.json` starts at the
-  repository's release (0.3.0) and is raised with every release; the tests
-  fail when it is behind the latest `v*` tag.
+- **The version** in `plugin/.claude-plugin/plugin.json` follows the
+  repository's releases (0.3.1 now) and is raised with every release; the
+  tests fail when it is behind the latest `v*` tag.
 - **The directory's checks** that can be checked here are in
   `tests/plugin.bats`: the manifest, no hooks or servers, regular files
   under the size and count limits, portable names, a README of 40 words or
