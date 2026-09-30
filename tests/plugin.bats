@@ -270,7 +270,19 @@ EOS
 	done
 	[ "$(jq -r .documentationUrl "$MANIFEST")" = "$(jq -r .homepage "$MANIFEST")" ]
 	[ "$(jq -r .supportUrl "$MANIFEST")" = https://github.com/NoeticEcho/control-room/issues ]
-	[[ "$(jq -r '.classification | strings' "$MANIFEST")" =~ ^[a-z]+(-[a-z]+)*$ ]]
+}
+
+@test "classification: an object with only the keys the portal accepts, each of its shape" {
+	# The portal (2026-09-30): object_acted_on a list of strings; work_department,
+	# industry, life_area and subject one string each; no other key.
+	jq -e '.classification | type == "object" and length > 0' "$MANIFEST" >/dev/null
+	extra=$(jq -r '.classification | keys[] | select(IN("object_acted_on", "work_department", "industry", "life_area", "subject") | not)' "$MANIFEST")
+	[ -z "$extra" ] || { echo "not accepted: $extra"; return 1; }
+	jq -e '.classification | (.object_acted_on // ["x"]) | type == "array" and length > 0 and all(type == "string" and length > 0)' "$MANIFEST" >/dev/null
+	for key in work_department industry life_area subject; do
+		jq -e --arg k "$key" '.classification | (has($k) | not) or (.[$k] | type == "string" and length > 0)' "$MANIFEST" >/dev/null ||
+			{ echo "$key must be one non-empty string"; return 1; }
+	done
 }
 
 @test "the privacy and terms pages say what the listing promises, and the docs page says how support works" {
