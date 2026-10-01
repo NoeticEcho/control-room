@@ -1,3 +1,14 @@
+# The cloud environment's setup script
+
+This is text for the person to paste, whole, into the **Setup script** box of
+a Claude Code cloud environment on claude.ai/code. It runs there, inside
+that cloud environment, before each session starts. It never runs on the
+machine where the plugin is installed, and the plugin never runs it.
+
+Add the project's own installs in the place marked "your stack", then paste
+the whole block.
+
+```bash
 #!/bin/bash
 # control-room: setup script for a Claude Code cloud environment, one per
 # worker profile. Paste it WHOLE into the environment's "Setup script" box on
@@ -39,3 +50,4 @@ python3 -c 'import jsonschema' 2>/dev/null ||
 
 log "done for profile ${CR_PROFILE:-<unset>}"
 exit 0
+```

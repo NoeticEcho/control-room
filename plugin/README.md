@@ -40,9 +40,10 @@ run these commands, in your terminal and with your permission:
 | `gh issue create`, `gh issue comment`, `gh issue edit`, `gh issue close` | Writes and closes desk cards | GitHub, through `gh` |
 | `claude -p "<brief>" --cloud <session> --output-format json` | Sends a brief to a worker's cloud session, after you say yes (or when you told Claude to send briefs) | Your own Claude Code cloud session on claude.ai |
 
-`scripts/cloud-setup.sh` is a text for you to paste into a cloud
-environment's setup box: it installs `jq` and the Python `jsonschema` module
-there, not on your machine. The plugin needs `git` 2.38 or later, and `gh`
+The `start-cloud-worker` skill also gives you a setup script to paste into a
+cloud environment's setup box on claude.ai. It is text in the skill, not a
+file the plugin runs: it runs only in that cloud environment, where it
+installs `jq` and the Python `jsonschema` module, never on your machine. The plugin needs `git` 2.38 or later, and `gh`
 for the desk and for reading CI.
 
 ## Credentials

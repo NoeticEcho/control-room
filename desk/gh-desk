@@ -30,28 +30,37 @@ die() {
 command -v gh >/dev/null 2>&1 || die "needs the GitHub CLI, gh" 2
 command -v jq >/dev/null 2>&1 || die "needs jq" 2
 
-# gh_repo <gh arguments...>: gh, with -R when GH_DESK_REPO is set
-gh_repo() {
+# Every gh call is written out in full below, once for the repository gh finds
+# from the current directory and once with -R for GH_DESK_REPO: the desk runs
+# `gh label create` and `gh issue list`, nothing else, and passes gh nothing
+# but these fixed arguments and the repository's name.
+
+cmd_labels() {
 	if [ -n "${GH_DESK_REPO:-}" ]; then
-		gh "$@" -R "$GH_DESK_REPO"
+		gh label create decision --force --color 5319e7 --description "Desk: the owner decides" -R "$GH_DESK_REPO"
+		gh label create action --force --color d93f0b --description "Desk: the owner does something agents may not" -R "$GH_DESK_REPO"
+		gh label create answered --force --color 1d76db --description "Desk: the owner answered; the coordinator acts" -R "$GH_DESK_REPO"
+		gh label create "done" --force --color 0e8a16 --description "Desk: the coordinator acted on the answer" -R "$GH_DESK_REPO"
 	else
-		gh "$@"
+		gh label create decision --force --color 5319e7 --description "Desk: the owner decides"
+		gh label create action --force --color d93f0b --description "Desk: the owner does something agents may not"
+		gh label create answered --force --color 1d76db --description "Desk: the owner answered; the coordinator acts"
+		gh label create "done" --force --color 0e8a16 --description "Desk: the coordinator acted on the answer"
 	fi
 }
 
-cmd_labels() {
-	gh_repo label create decision --force --color 5319e7 --description "Desk: the owner decides"
-	gh_repo label create action --force --color d93f0b --description "Desk: the owner does something agents may not"
-	gh_repo label create answered --force --color 1d76db --description "Desk: the owner answered; the coordinator acts"
-	gh_repo label create "done" --force --color 0e8a16 --description "Desk: the coordinator acted on the answer"
-}
-
 cmd_list() {
-	fields=number,title,labels,createdAt,url,comments
-	decision=$(gh_repo issue list --state open --label decision --limit 200 --json "$fields") ||
-		die "gh issue list failed"
-	action=$(gh_repo issue list --state open --label action --limit 200 --json "$fields") ||
-		die "gh issue list failed"
+	if [ -n "${GH_DESK_REPO:-}" ]; then
+		decision=$(gh issue list --state open --label decision --limit 200 --json number,title,labels,createdAt,url,comments -R "$GH_DESK_REPO") ||
+			die "gh issue list failed"
+		action=$(gh issue list --state open --label action --limit 200 --json number,title,labels,createdAt,url,comments -R "$GH_DESK_REPO") ||
+			die "gh issue list failed"
+	else
+		decision=$(gh issue list --state open --label decision --limit 200 --json number,title,labels,createdAt,url,comments) ||
+			die "gh issue list failed"
+		action=$(gh issue list --state open --label action --limit 200 --json number,title,labels,createdAt,url,comments) ||
+			die "gh issue list failed"
+	fi
 	printf '%s\n%s\n' "$decision" "$action" | jq -rs --arg now "${GH_DESK_NOW:-}" '
 		(if $now == "" then now else ($now | tonumber) end) as $now
 		| add | unique_by(.number)

@@ -80,10 +80,13 @@ A card that is open with comments but no `answered` label may hold an answer
 the owner forgot to mark: the comment count is there to catch it.
 
 It needs `gh` signed in and `jq`; `GH_DESK_REPO=owner/repo` points it at
-another repository. The flags it uses (`gh issue list --state --label --limit
+another repository. Each of its `gh` calls is written out in full in the
+script, with `-R` (`--repo`) added only when `GH_DESK_REPO` is set; it passes
+`gh` nothing else. The flags it uses (`gh issue list --state --label --limit
 --json`, and the fields `number, title, labels, createdAt, url, comments`;
-`gh label create --force`) are checked against the GitHub CLI manual
-(<https://cli.github.com/manual/gh_issue_list>,
-<https://cli.github.com/manual/gh_label_create>, read 2026-09-25).
+`gh label create --force --color --description`; `-R`) are checked against
+the GitHub CLI manual (<https://cli.github.com/manual/gh_issue_list>,
+<https://cli.github.com/manual/gh_label_create>, read 2026-09-25 and
+2026-10-01).
 `tests/gh-desk.bats` runs it against a fake `gh`; it has not been run against
 a live repository here.
