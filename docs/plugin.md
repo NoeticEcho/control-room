@@ -99,7 +99,8 @@ Once it is listed in Anthropic's plugin directory, add it from
   `privacyPolicyUrl`, `termsOfServiceUrl`, `classification`) are read by the
   directory's portal, not by Claude Code; `classification` is an object with
   only `object_acted_on` (a list of strings) and `work_department`,
-  `industry`, `life_area`, `subject` (one string each), the shape the portal
+  `industry`, `life_area`, `subject` (one string each), each value taken from
+  the portal's own lists (`pull-requests`, `software-saas`, `computing`, …), the shape the portal
   required on 2026-09-30.
 - **The version** in `plugin/.claude-plugin/plugin.json` follows the
   repository's releases (0.3.2 now) and is raised with every release; the

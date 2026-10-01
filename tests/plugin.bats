@@ -298,3 +298,14 @@ EOS
 	[[ "$support" == *"https://github.com/NoeticEcho/control-room/issues"* ]]
 	[[ "$support" == *"no promised response time"* ]]
 }
+
+@test "classification: every value is one the portal's taxonomy accepts" {
+	# The portal's Validate (2026-10-01) drops a value outside its lists and says
+	# so; these are the lists it printed. A new value is checked there first.
+	objects='["code","databases","servers-cloud","logs-errors","files-documents","ai-models-agents","pipelines-jobs","websites","finances","tickets-tasks","email-messages","designs-media","reference-docs","dependencies-packages","music-podcasts","papers-articles","notes-memory","books","contacts-leads","pull-requests","problems-puzzles","courses-lessons","events-tickets","apis","claude-history","claude-settings","recipes-meals","workouts-health-records","trips"]'
+	industries='["health-life-sciences","financial-services","education","nonprofit","retail-ecommerce","travel-hospitality","media-entertainment","government","legal","real-estate","energy","manufacturing","transportation-logistics","utilities","agriculture","mining","construction","telecommunications","insurance","research-academia","events","fitness-wellness","agencies-staffing","software-saas"]'
+	subjects='["medicine","science","maths","languages","history","philosophy-religion","the-arts","computing","engineering","law","economics","politics-government","psychology","sociology-anthropology","geography","business-management","education"]'
+	jq -e --argjson ok "$objects" '.classification.object_acted_on | all(. as $v | $ok | index($v))' "$MANIFEST" >/dev/null
+	jq -e --argjson ok "$industries" '.classification | (has("industry") | not) or (.industry as $v | $ok | index($v))' "$MANIFEST" >/dev/null
+	jq -e --argjson ok "$subjects" '.classification | (has("subject") | not) or (.subject as $v | $ok | index($v))' "$MANIFEST" >/dev/null
+}

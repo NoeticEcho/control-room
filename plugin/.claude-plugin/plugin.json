@@ -1,7 +1,7 @@
 {
   "name": "noetic-control-room",
   "displayName": "control-room",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "One person, one AI coordinator, many AI coding agents. Skills for the coordinator: brief a worker in the fixed shape, check a READY pull request and land it, keep a decision desk of what only the person can decide, and start a Claude Code cloud worker.",
   "author": {
     "name": "NoeticEcho",
@@ -16,9 +16,9 @@
   "license": "Apache-2.0",
   "keywords": ["coordinator", "multi-agent", "pull-requests", "code-review", "workflow"],
   "classification": {
-    "object_acted_on": ["pull requests", "git branches", "GitHub issues", "coding agent sessions"],
+    "object_acted_on": ["pull-requests", "code", "tickets-tasks", "ai-models-agents"],
     "work_department": "Engineering",
-    "industry": "Software",
-    "subject": "Coordinating several AI coding agents on one repository"
+    "industry": "software-saas",
+    "subject": "computing"
   }
 }
