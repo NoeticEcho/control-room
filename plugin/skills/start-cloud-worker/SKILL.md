@@ -33,10 +33,11 @@ Give the user these steps for claude.ai/code, each text whole:
 3. **Environment variables**, one line in `.env` format:
    `CR_PROFILE=<profile>`. Anyone who can use the environment can read its
    variables: **no secrets** there, ever.
-4. **Setup script**: the whole text of
-   `${CLAUDE_PLUGIN_ROOT}/scripts/cloud-setup.sh` (read it and paste it into
-   your reply in one code block), with the project's own installs added in
-   the marked place. Tell them to paste it whole: a one-line
+4. **Setup script**: the bash block in
+   [references/cloud-setup.md](references/cloud-setup.md), whole, in one
+   code block in your reply, with the project's own installs added in the
+   marked place. It runs in the cloud environment, never here: do not run
+   it yourself. Tell them to paste it whole: a one-line
    `bash scripts/setup.sh` can fail because the repository is not always
    cloned when the box runs.
 

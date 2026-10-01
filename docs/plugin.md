@@ -24,9 +24,11 @@ The scripts, run by the skills as `sh ${CLAUDE_PLUGIN_ROOT}/scripts/<name>`:
   changes nothing. Tests: `tests/ready-check.bats`.
 - `gh-desk`: the same file as [`desk/gh-desk`](../desk/gh-desk).
 
-`scripts/cloud-setup.sh` is the same file as
+The setup script for a cloud environment is not one of the plugin's files:
+the `start-cloud-worker` skill carries it as a bash block in
+`references/cloud-setup.md`, the same text as
 [`runners/claude-code-cloud/setup.sh`](../runners/claude-code-cloud/setup.sh),
-for the person to paste into a cloud environment.
+for the person to paste into claude.ai. It runs only there.
 
 What this version leaves out, on purpose: hooks (so no worker guard; install
 [`scripts/guard`](../scripts/README.md) from the repository on the workers'
@@ -54,6 +56,16 @@ what it sends where.
 without `gh`, because the desk is GitHub Issues. Since 0.3.1 the landing
 skill reads the diff with `git diff` instead of `gh pr diff`, so reading
 what lands needs no sign-in either.
+
+0.3.4 removes what the scan read together as "a credential leaving the
+machine in two steps". `gh-desk` no longer passes its arguments through to
+`gh`: each of its six calls (`gh label create` four times, `gh issue list`
+twice) is written out in full, and `-R` is added by a fixed branch when
+`GH_DESK_REPO` is set. The cloud environment's setup script, which installs
+packages with `pip`, is no longer a file in `scripts/`: it is text in the
+`start-cloud-worker` skill for the person to paste into claude.ai, and it
+never runs on the installer's machine. No executable in the plugin installs
+anything or reaches the network except `gh-desk` through `gh`, to GitHub.
 
 ## The icon
 
@@ -103,7 +115,7 @@ Once it is listed in Anthropic's plugin directory, add it from
   the portal's own lists (`pull-requests`, `software-saas`, `computing`, …), the shape the portal
   required on 2026-09-30.
 - **The version** in `plugin/.claude-plugin/plugin.json` follows the
-  repository's releases (0.3.2 now) and is raised with every release; the
+  repository's releases (0.3.4 now) and is raised with every release; the
   tests fail when it is behind the latest `v*` tag.
 - **The directory's checks** that can be checked here are in
   `tests/plugin.bats`: the manifest, no hooks or servers, regular files

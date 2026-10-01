@@ -174,7 +174,12 @@ SPEC_KEYS=" name description license compatibility metadata allowed-tools "
 
 @test "the texts the plugin carries are the repository's, unchanged" {
 	cmp "$PLUGIN/scripts/gh-desk" "$ROOT/desk/gh-desk"
-	cmp "$PLUGIN/scripts/cloud-setup.sh" "$ROOT/runners/claude-code-cloud/setup.sh"
+	# The cloud environment's setup script is text to paste, not a file the
+	# plugin runs: one bash block in the skill's reference, the runner's file.
+	ref="$PLUGIN/skills/start-cloud-worker/references/cloud-setup.md"
+	[ "$(grep -c '^```bash$' "$ref")" -eq 1 ]
+	# shellcheck disable=SC2016 # backticks and $ are sed patterns
+	sed -n '/^```bash$/,/^```$/p' "$ref" | sed '1d;$d' | cmp - "$ROOT/runners/claude-code-cloud/setup.sh"
 	cmp "$PLUGIN/skills/brief-worker/references/brief-template.md" "$ROOT/prompts/en/brief.md"
 	cmp "$PLUGIN/skills/start-cloud-worker/references/worker-opening.md" "$ROOT/prompts/en/worker-opening.md"
 }
@@ -210,8 +215,7 @@ SPEC_KEYS=" name description license compatibility metadata allowed-tools "
 	# Every upper-case variable a script expands; lower-case ones are its own.
 	# shellcheck disable=SC2016 # the patterns are literal
 	used=$(grep -ohE '\$\{?[A-Z][A-Z0-9_]*' ./* | tr -d '${' | sort -u | tr '\n' ' ')
-	[ "$used" = "CLAUDE_PLUGIN_ROOT CR_PROFILE GH_DESK_NOW GH_DESK_REPO " ] ||
-		[ "$used" = "CR_PROFILE GH_DESK_NOW GH_DESK_REPO " ] || { echo "reads: $used"; return 1; }
+	[ "$used" = "GH_DESK_NOW GH_DESK_REPO " ] || { echo "reads: $used"; return 1; }
 	# shellcheck disable=SC2016,SC2088 # the patterns are literal
 	run grep -nE '~/|\$HOME|\.config/|\.netrc|\.git-credentials|hosts\.yml|auth (token|status)|gh auth|curl |wget ' ./*
 	[ "$status" -eq 1 ]
@@ -220,6 +224,23 @@ SPEC_KEYS=" name description license compatibility metadata allowed-tools "
 	run sh -c "grep -vE '^[[:space:]]*#|die \"|finding \"|printf ' ready-check |
 		grep -nwE 'gh|curl|wget|ssh|git (fetch|push|pull|ls-remote|clone)'"
 	[ "$status" -eq 1 ]
+}
+
+@test "the executables: only ready-check and gh-desk; nothing installs, nothing but gh reaches the network" {
+	cd "$PLUGIN"
+	# Every executable or script in the plugin, wherever it is.
+	found=$(find . -type f \( -perm -u+x -o -name '*.sh' -o -name '*.py' -o -name '*.js' -o -name '*.mjs' \) | sort | tr '\n' ' ')
+	[ "$found" = "./scripts/gh-desk ./scripts/ready-check " ] || { echo "executables: $found"; return 1; }
+	# shellcheck disable=SC2016 # the patterns are literal
+	run grep -nwE 'pip|pip3|apt|apt-get|npm|npx|brew|curl|wget|nc|ssh|python|python3|node|install' scripts/ready-check scripts/gh-desk
+	[ "$status" -eq 1 ]
+	# gh-desk passes gh no argument list: each call is written out, and is
+	# `gh label create` or `gh issue list`.
+	# shellcheck disable=SC2016 # the patterns are literal
+	run grep -nE 'gh "?\$[@*]|gh "?\$\{?[A-Za-z_]' scripts/gh-desk
+	[ "$status" -eq 1 ]
+	calls=$(grep -oE '(^|\$\()[[:space:]]*gh [a-z]+ [a-z]+' scripts/gh-desk | sed -E 's/^\$\(//; s/^[[:space:]]+//' | sort | uniq -c | awk '{ print $1, $2, $3, $4 }' | tr '\n' ';')
+	[ "$calls" = "4 gh issue list;8 gh label create;" ] || { echo "gh calls: $calls"; return 1; }
 }
 
 @test "credentials: with canary tokens in the environment, no script passes one to gh or prints it" {
@@ -308,4 +329,7 @@ EOS
 	jq -e --argjson ok "$objects" '.classification.object_acted_on | all(. as $v | $ok | index($v))' "$MANIFEST" >/dev/null
 	jq -e --argjson ok "$industries" '.classification | (has("industry") | not) or (.industry as $v | $ok | index($v))' "$MANIFEST" >/dev/null
 	jq -e --argjson ok "$subjects" '.classification | (has("subject") | not) or (.subject as $v | $ok | index($v))' "$MANIFEST" >/dev/null
+	# work_department: the portal stores its canonical slug ("Engineering" is
+	# stored as "engineering"), so the manifest says the slug.
+	jq -e '.classification | (has("work_department") | not) or (.work_department | test("^[a-z]+(-[a-z]+)*$"))' "$MANIFEST" >/dev/null
 }
